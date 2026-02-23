@@ -11,7 +11,7 @@ NotificationCollector::NotificationCollector(WebView2Widget *browser,
                                              QObject *parent)
     : QObject(parent), m_browser(browser), m_storage(storage),
       m_collecting(false), m_scriptInjected(false), m_scrollCount(0),
-      m_maxPages(5), m_autoRefreshInterval(150) {
+      m_maxPages(5), m_autoRefreshInterval(150), m_countdownRemaining(0) {
 
   m_pollTimer = new QTimer(this);
   m_pollTimer->setInterval(15000); // 15s polling
@@ -21,12 +21,26 @@ NotificationCollector::NotificationCollector(WebView2Widget *browser,
   m_autoRefreshTimer = new QTimer(this);
   m_autoRefreshTimer->setSingleShot(true);
   connect(m_autoRefreshTimer, &QTimer::timeout, this, [this]() {
+    m_countdownTimer->stop();
     if (!m_collecting) {
       emit statusMessage(QString::fromUtf8(
           "\xe2\x8f\xb0 "
           "\xe8\x87\xaa\xe5\x8a\xa8\xe5\x88\xb7\xe6\x96\xb0\xe4\xb8\xad..."));
       m_browser->Reload();
       QTimer::singleShot(3000, this, [this]() { startCollecting(); });
+    }
+  });
+
+  m_countdownTimer = new QTimer(this);
+  m_countdownTimer->setInterval(1000);
+  connect(m_countdownTimer, &QTimer::timeout, this, [this]() {
+    m_countdownRemaining--;
+    if (m_countdownRemaining > 0) {
+      emit statusMessage(
+          QString::fromUtf8("\xe2\x8f\xb3 "
+                            "\xe8\x87\xaa\xe5\x8a\xa8\xe5\x88\xb7\xe6\x96\xb0"
+                            "\xe5\x80\x92\xe8\xae\xa1\xe6\x97\xb6: %1s")
+              .arg(m_countdownRemaining));
     }
   });
 
@@ -382,11 +396,13 @@ void NotificationCollector::triggerScroll() {
     // Start auto-refresh timer if enabled
     if (m_autoRefreshInterval > 0) {
       m_autoRefreshTimer->start(m_autoRefreshInterval * 1000);
+      m_countdownRemaining = m_autoRefreshInterval;
+      m_countdownTimer->start();
       emit statusMessage(
-          QString::fromUtf8("\xe2\x8f\xb0 %1 "
-                            "\xe7\xa7\x92\xe5\x90\x8e\xe8\x87\xaa\xe5\x8a\xa8"
-                            "\xe5\x88\xb7\xe6\x96\xb0")
-              .arg(m_autoRefreshInterval));
+          QString::fromUtf8("\xe2\x8f\xb3 "
+                            "\xe8\x87\xaa\xe5\x8a\xa8\xe5\x88\xb7\xe6\x96\xb0"
+                            "\xe5\x80\x92\xe8\xae\xa1\xe6\x97\xb6: %1s")
+              .arg(m_countdownRemaining));
     }
     return;
   }

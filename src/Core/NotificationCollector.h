@@ -56,6 +56,8 @@ private:
   int m_scrollCount;
   int m_maxPages;
   int m_autoRefreshInterval; // seconds
+  QTimer *m_countdownTimer;
+  int m_countdownRemaining;
 };
 
 #endif // NOTIFICATIONCOLLECTOR_H

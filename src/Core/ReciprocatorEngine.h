@@ -71,6 +71,8 @@ private:
   int m_batchTotal;
   int m_batchInterval; // seconds
   QTimer *m_batchTimer;
+  QTimer *m_batchCountdownTimer;
+  int m_batchCountdownRemaining;
   bool m_batchMode;
 };
 

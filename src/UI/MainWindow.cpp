@@ -242,11 +242,24 @@ void MainWindow::setupConnections() {
           [this](int done, int total) {
             onStatusMessage(QString("Batch: %1/%2").arg(done).arg(total));
           });
-  connect(m_reciprocator, &ReciprocatorEngine::batchFinished, this,
-          [this]() { m_actionPanel->refreshAll(); });
+  connect(m_reciprocator, &ReciprocatorEngine::batchFinished, this, [this]() {
+    m_actionPanel->refreshAll();
+    m_batchBtn->setText(QString::fromUtf8(
+        "\xf0\x9f\x9a\x80 \xe6\x89\xb9\xe9\x87\x8f\xe5\x9b\x9e\xe9\xa6\x88"));
+    m_batchBtn->setStyleSheet(
+        "QPushButton { background: #e65100; color: #e0e0e0; border: 1px solid "
+        "#ff6d00; border-radius: 6px; padding: 6px 16px; font-size: 13px; "
+        "min-width: 80px; }"
+        "QPushButton:hover { background: #ff6d00; }");
+  });
 
-  // Batch button
+  // Batch button - toggle start/stop
   connect(m_batchBtn, &QPushButton::clicked, this, [this]() {
+    // If batch is running, stop it
+    if (m_reciprocator->isBusy()) {
+      m_reciprocator->stopBatch();
+      return;
+    }
     auto likes = m_storage->loadLikes();
     QDate today = QDate::currentDate();
     QList<QPair<QString, QString>> pending;
@@ -259,11 +272,21 @@ void MainWindow::setupConnections() {
       }
     }
     if (pending.isEmpty()) {
-      onStatusMessage("No pending likes today.");
+      onStatusMessage(QString::fromUtf8(
+          "\xe4\xbb\x8a\xe5\xa4\xa9\xe6\xb2\xa1\xe6\x9c\x89\xe5\xbe\x85\xe5\x9b"
+          "\x9e\xe9\xa6\x88\xe7\x9a\x84\xe7\x82\xb9\xe8\xb5\x9e"));
       return;
     }
     m_reciprocator->setBatchInterval(m_batchIntervalSpin->value());
     m_reciprocator->startBatchReciprocate(pending);
+    // Toggle button to stop mode
+    m_batchBtn->setText(QString::fromUtf8(
+        "\xe2\x8f\xb9 \xe5\x81\x9c\xe6\xad\xa2\xe5\x9b\x9e\xe9\xa6\x88"));
+    m_batchBtn->setStyleSheet(
+        "QPushButton { background: #b71c1c; color: #e0e0e0; border: 1px solid "
+        "#d32f2f; border-radius: 6px; padding: 6px 16px; font-size: 13px; "
+        "min-width: 80px; }"
+        "QPushButton:hover { background: #d32f2f; }");
   });
 
   // Spinbox value changes -> save settings

@@ -95,16 +95,27 @@ void StatsPanel::generateMarkdown(const QDate &date) {
   QString dayOfWeek = date.toString("dddd");
 
   md += QString("# %1 %2\n\n").arg(dateStr, dayOfWeek);
-  md += QString("## Daily Reciprocation Summary\n\n");
-  md += QString("- Total Reciprocated Users: **%1**\n").arg(sorted.size());
-  md += QString("- Total Likes Given: **%1**\n").arg(totalLikes);
-  md += QString("- Total Replies Given: **%1**\n").arg(totalReplies);
-  md += QString("- Grand Total: **%1**\n\n").arg(totalLikes + totalReplies);
+  md += QString::fromUtf8("## "
+                          "\xe6\xaf\x8f\xe6\x97\xa5\xe5\x9b\x9e\xe9\xa6\x88\xe7"
+                          "\xbb\x9f\xe8\xae\xa1\n\n");
+  md += QString::fromUtf8("- "
+                          "\xe5\xb7\xb2\xe5\x9b\x9e\xe9\xa6\x88\xe7\x94\xa8\xe6"
+                          "\x88\xb7\xe6\x95\xb0: **%1**\n")
+            .arg(sorted.size());
+  md += QString::fromUtf8("- \xe7\x82\xb9\xe8\xb5\x9e\xe6\x95\xb0: **%1**\n")
+            .arg(totalLikes);
+  md += QString::fromUtf8("- \xe5\x9b\x9e\xe5\xa4\x8d\xe6\x95\xb0: **%1**\n")
+            .arg(totalReplies);
+  md += QString::fromUtf8("- \xe6\x80\xbb\xe8\xae\xa1: **%1**\n\n")
+            .arg(totalLikes + totalReplies);
 
   if (sorted.isEmpty()) {
-    md += "*No reciprocation records for this date.*\n";
+    md += QString::fromUtf8("*\xe8\xaf\xa5\xe6\x97\xa5\xe6\x97\xa0\xe5\x9b\x9e"
+                            "\xe9\xa6\x88\xe8\xae\xb0\xe5\xbd\x95*\n");
   } else {
-    md += "| # | User | Likes | Replies | Total |\n";
+    md += QString::fromUtf8(
+        "| # | \xe7\x94\xa8\xe6\x88\xb7 | \xe7\x82\xb9\xe8\xb5\x9e | "
+        "\xe5\x9b\x9e\xe5\xa4\x8d | \xe5\x90\x88\xe8\xae\xa1 |\n");
     md += "|---|------|-------|---------|-------|\n";
     int rank = 1;
     for (const auto &p : sorted) {

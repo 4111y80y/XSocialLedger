@@ -10,7 +10,7 @@ ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
     : QObject(parent), m_browser(browser), m_storage(storage), m_state(Idle),
       m_busy(false), m_scrollAttempts(0), m_maxScrollAttempts(15),
       m_batchDone(0), m_batchTotal(0), m_batchInterval(150),
-      m_batchMode(false) {
+      m_batchCountdownRemaining(0), m_batchMode(false) {
 
   m_stepTimer = new QTimer(this);
   m_stepTimer->setSingleShot(true);
@@ -22,6 +22,7 @@ ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
   m_batchTimer = new QTimer(this);
   m_batchTimer->setSingleShot(true);
   connect(m_batchTimer, &QTimer::timeout, this, [this]() {
+    m_batchCountdownTimer->stop();
     if (!m_batchMode || m_batchQueue.isEmpty()) {
       emit batchFinished();
       m_batchMode = false;
@@ -29,6 +30,21 @@ ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
     }
     auto next = m_batchQueue.takeFirst();
     startLikeReciprocate(next.first, next.second);
+  });
+
+  m_batchCountdownTimer = new QTimer(this);
+  m_batchCountdownTimer->setInterval(1000);
+  connect(m_batchCountdownTimer, &QTimer::timeout, this, [this]() {
+    m_batchCountdownRemaining--;
+    if (m_batchCountdownRemaining > 0) {
+      emit statusMessage(
+          QString::fromUtf8("\xe2\x8f\xb3 "
+                            "\xe5\x9b\x9e\xe9\xa6\x88\xe5\x80\x92\xe8\xae\xa1"
+                            "\xe6\x97\xb6: %1s (%2/%3)")
+              .arg(m_batchCountdownRemaining)
+              .arg(m_batchDone + 1)
+              .arg(m_batchTotal));
+    }
   });
 }
 
@@ -118,6 +134,8 @@ void ReciprocatorEngine::onStepTimer() {
         m_batchMode = false;
       } else {
         m_batchTimer->start(m_batchInterval * 1000);
+        m_batchCountdownRemaining = m_batchInterval;
+        m_batchCountdownTimer->start();
       }
     }
     break;
@@ -239,6 +257,7 @@ void ReciprocatorEngine::stopBatch() {
   m_batchMode = false;
   m_batchQueue.clear();
   m_batchTimer->stop();
+  m_batchCountdownTimer->stop();
   stop();
   emit batchFinished();
 }

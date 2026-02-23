@@ -29,10 +29,9 @@ NotificationCollector::NotificationCollector(WebView2Widget *browser,
   connect(
       m_browser, &WebView2Widget::selfHandleDetected, this,
       [this](const QString &handle) {
+        m_storage->setSelfHandle(handle);
         int removed = m_storage->removeByHandle(handle);
         if (removed > 0) {
-          qDebug() << "[Collector] Cleaned" << removed << "self records for @"
-                   << handle;
           emit selfRecordsCleaned(removed);
           emit statusMessage(
               QString("已清理 %1 条自己的记录 (@%2)").arg(removed).arg(handle));

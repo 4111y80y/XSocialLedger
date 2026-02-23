@@ -26,7 +26,11 @@ void ActionListPanel::setupUI() {
   layout->setSpacing(4);
 
   // 标题
-  QLabel *titleLabel = new QLabel("📒 社交互动记录", this);
+  QLabel *titleLabel =
+      new QLabel(QString::fromUtf8("\xf0\x9f\x93\x92 "
+                                   "\xe7\xa4\xbe\xe4\xba\xa4\xe4\xba\x92\xe5"
+                                   "\x8a\xa8\xe8\xae\xb0\xe5\xbd\x95"),
+                 this);
   QFont titleFont = titleLabel->font();
   titleFont.setPointSize(12);
   titleFont.setBold(true);
@@ -56,7 +60,11 @@ void ActionListPanel::setupUI() {
   // 点赞表格
   m_likeTable = new QTableWidget(this);
   m_likeTable->setColumnCount(4);
-  m_likeTable->setHorizontalHeaderLabels({"用户", "时间", "帖子片段", "状态"});
+  m_likeTable->setHorizontalHeaderLabels(
+      {QString::fromUtf8("\xe7\x94\xa8\xe6\x88\xb7"),
+       QString::fromUtf8("\xe6\x97\xb6\xe9\x97\xb4"),
+       QString::fromUtf8("\xe5\xb8\x96\xe5\xad\x90\xe7\x89\x87\xe6\xae\xb5"),
+       QString::fromUtf8("\xe7\x8a\xb6\xe6\x80\x81")});
   m_likeTable->horizontalHeader()->setStretchLastSection(true);
   m_likeTable->horizontalHeader()->setSectionResizeMode(
       0, QHeaderView::ResizeToContents);
@@ -81,22 +89,29 @@ void ActionListPanel::setupUI() {
   connect(m_likeTable, &QTableWidget::cellDoubleClicked, this,
           [this](int row, int) {
             QTableWidgetItem *userItem = m_likeTable->item(row, 0);
-            QTableWidgetItem *statusItem = m_likeTable->item(row, 3);
-            if (!userItem || !statusItem)
+            if (!userItem)
               return;
-            // 只对“待回馋”的记录触发
-            if (statusItem->text().contains("待回馋")) {
+            bool reciprocated = userItem->data(Qt::UserRole + 2).toBool();
+            if (!reciprocated) {
               QString actionId = userItem->data(Qt::UserRole).toString();
               QString userHandle = userItem->data(Qt::UserRole + 1).toString();
+              qDebug() << "[ActionListPanel] Double-click reciprocate:"
+                       << userHandle << actionId;
               emit reciprocateLikeRequested(userHandle, actionId);
             }
           });
-  m_tabWidget->addTab(m_likeTable, "❤️ 点赞");
+  m_tabWidget->addTab(
+      m_likeTable,
+      QString::fromUtf8("\xe2\x9d\xa4\xef\xb8\x8f \xe7\x82\xb9\xe8\xb5\x9e"));
 
   // 回复表格
   m_replyTable = new QTableWidget(this);
   m_replyTable->setColumnCount(4);
-  m_replyTable->setHorizontalHeaderLabels({"用户", "时间", "帖子片段", "状态"});
+  m_replyTable->setHorizontalHeaderLabels(
+      {QString::fromUtf8("\xe7\x94\xa8\xe6\x88\xb7"),
+       QString::fromUtf8("\xe6\x97\xb6\xe9\x97\xb4"),
+       QString::fromUtf8("\xe5\xb8\x96\xe5\xad\x90\xe7\x89\x87\xe6\xae\xb5"),
+       QString::fromUtf8("\xe7\x8a\xb6\xe6\x80\x81")});
   m_replyTable->horizontalHeader()->setStretchLastSection(true);
   m_replyTable->horizontalHeader()->setSectionResizeMode(
       0, QHeaderView::ResizeToContents);
@@ -118,7 +133,9 @@ void ActionListPanel::setupUI() {
       "  padding: 4px; border: 1px solid #2a2a4a; }");
   connect(m_replyTable, &QTableWidget::customContextMenuRequested, this,
           &ActionListPanel::onReplyContextMenu);
-  m_tabWidget->addTab(m_replyTable, "💬 回复");
+  m_tabWidget->addTab(
+      m_replyTable,
+      QString::fromUtf8("\xf0\x9f\x92\xac \xe5\x9b\x9e\xe5\xa4\x8d"));
 
   layout->addWidget(m_tabWidget);
 }
@@ -131,7 +148,7 @@ void ActionListPanel::populateTable(QTableWidget *table, const QString &type) {
     actions = m_storage->loadReplies();
   }
 
-  // 按时间降序排列（最新的在最前面）
+  // Sort by timestamp descending (newest first)
   std::sort(actions.begin(), actions.end(),
             [](const SocialAction &a, const SocialAction &b) {
               return a.timestamp > b.timestamp;
@@ -142,16 +159,17 @@ void ActionListPanel::populateTable(QTableWidget *table, const QString &type) {
   for (int i = 0; i < actions.size(); i++) {
     const SocialAction &action = actions[i];
 
-    // 用户名
+    // Username
     QString displayName =
         action.userName.isEmpty() ? ("@" + action.userHandle) : action.userName;
     QTableWidgetItem *userItem = new QTableWidgetItem(displayName);
     userItem->setData(Qt::UserRole, action.id);
     userItem->setData(Qt::UserRole + 1, action.userHandle);
+    userItem->setData(Qt::UserRole + 2, action.reciprocated);
     userItem->setToolTip("@" + action.userHandle);
     table->setItem(i, 0, userItem);
 
-    // 时间
+    // Time
     QDateTime dt = QDateTime::fromString(action.timestamp, Qt::ISODate);
     QString timeStr = dt.isValid() ? dt.toLocalTime().toString("MM-dd HH:mm")
                                    : action.timestamp;
@@ -159,7 +177,7 @@ void ActionListPanel::populateTable(QTableWidget *table, const QString &type) {
     timeItem->setToolTip(action.timestamp);
     table->setItem(i, 1, timeItem);
 
-    // 帖子片段
+    // Post snippet
     QString snippet = action.postSnippet;
     if (snippet.length() > 50) {
       snippet = snippet.left(50) + "...";
@@ -168,8 +186,13 @@ void ActionListPanel::populateTable(QTableWidget *table, const QString &type) {
     snippetItem->setToolTip(action.postSnippet);
     table->setItem(i, 2, snippetItem);
 
-    // 状态
-    QString status = action.reciprocated ? "✅ 已回馈" : "⏳ 待回馈";
+    // Status
+    QString status =
+        action.reciprocated
+            ? QString::fromUtf8(
+                  "\xe2\x9c\x85 \xe5\xb7\xb2\xe5\x9b\x9e\xe9\xa6\x88")
+            : QString::fromUtf8(
+                  "\xe2\x8f\xb3 \xe5\xbe\x85\xe5\x9b\x9e\xe9\xa6\x88");
     QTableWidgetItem *statusItem = new QTableWidgetItem(status);
     if (action.reciprocated) {
       statusItem->setForeground(QColor("#4caf50"));
@@ -202,7 +225,10 @@ void ActionListPanel::updateStats() {
   int pendingReplies = m_storage->pendingReplyCount();
 
   m_statsLabel->setText(
-      QString("❤️ 点赞: %1 (待回馈 %2)  |  💬 回复: %3 (待回馈 %4)")
+      QString::fromUtf8("\xe2\x9d\xa4\xef\xb8\x8f \xe7\x82\xb9\xe8\xb5\x9e: %1 "
+                        "(\xe5\xbe\x85\xe5\x9b\x9e\xe9\xa6\x88 %2)  |  "
+                        "\xf0\x9f\x92\xac \xe5\x9b\x9e\xe5\xa4\x8d: %3 "
+                        "(\xe5\xbe\x85\xe5\x9b\x9e\xe9\xa6\x88 %4)")
           .arg(likes)
           .arg(pendingLikes)
           .arg(replies)
@@ -237,10 +263,18 @@ void ActionListPanel::onLikeContextMenu(const QPoint &pos) {
                      "solid #3a3a5a; }"
                      "QMenu::item:selected { background: #2a3a5e; }");
 
-  QAction *markAction = menu.addAction("✅ 标记已回馈");
-  QAction *unmarkAction = menu.addAction("⏳ 取消回馈标记");
+  QAction *markAction = menu.addAction(QString::fromUtf8(
+      "\xe2\x9c\x85 "
+      "\xe6\xa0\x87\xe8\xae\xb0\xe5\xb7\xb2\xe5\x9b\x9e\xe9\xa6\x88"));
+  QAction *unmarkAction =
+      menu.addAction(QString::fromUtf8("\xe2\x8f\xb3 "
+                                       "\xe5\x8f\x96\xe6\xb6\x88\xe5\x9b\x9e"
+                                       "\xe9\xa6\x88\xe6\xa0\x87\xe8\xae\xb0"));
   menu.addSeparator();
-  QAction *openProfileAction = menu.addAction("🔗 打开用户主页");
+  QAction *openProfileAction =
+      menu.addAction(QString::fromUtf8("\xf0\x9f\x94\x97 "
+                                       "\xe6\x89\x93\xe5\xbc\x80\xe7\x94\xa8"
+                                       "\xe6\x88\xb7\xe4\xb8\xbb\xe9\xa1\xb5"));
 
   QAction *selected = menu.exec(m_likeTable->viewport()->mapToGlobal(pos));
 
@@ -274,10 +308,18 @@ void ActionListPanel::onReplyContextMenu(const QPoint &pos) {
                      "solid #3a3a5a; }"
                      "QMenu::item:selected { background: #2a3a5e; }");
 
-  QAction *markAction = menu.addAction("✅ 标记已回馈");
-  QAction *unmarkAction = menu.addAction("⏳ 取消回馈标记");
+  QAction *markAction = menu.addAction(QString::fromUtf8(
+      "\xe2\x9c\x85 "
+      "\xe6\xa0\x87\xe8\xae\xb0\xe5\xb7\xb2\xe5\x9b\x9e\xe9\xa6\x88"));
+  QAction *unmarkAction =
+      menu.addAction(QString::fromUtf8("\xe2\x8f\xb3 "
+                                       "\xe5\x8f\x96\xe6\xb6\x88\xe5\x9b\x9e"
+                                       "\xe9\xa6\x88\xe6\xa0\x87\xe8\xae\xb0"));
   menu.addSeparator();
-  QAction *openProfileAction = menu.addAction("🔗 打开用户主页");
+  QAction *openProfileAction =
+      menu.addAction(QString::fromUtf8("\xf0\x9f\x94\x97 "
+                                       "\xe6\x89\x93\xe5\xbc\x80\xe7\x94\xa8"
+                                       "\xe6\x88\xb7\xe4\xb8\xbb\xe9\xa1\xb5"));
 
   QAction *selected = menu.exec(m_replyTable->viewport()->mapToGlobal(pos));
 
@@ -293,5 +335,5 @@ void ActionListPanel::onReplyContextMenu(const QPoint &pos) {
 }
 
 void ActionListPanel::onMarkReciprocated(const QString &actionId) {
-  // 已在上下文菜单处理中调用
+  // Already handled in context menu
 }

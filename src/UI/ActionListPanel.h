@@ -8,6 +8,7 @@
 #include <QWidget>
 
 class DataStorage;
+class StatsPanel;
 
 // 社交互动记录面板 (右侧面板)
 class ActionListPanel : public QWidget {
@@ -50,6 +51,7 @@ private:
   QTableWidget *m_replyTable;
   QLabel *m_statsLabel;
   QCheckBox *m_hideReciprocatedCheck;
+  StatsPanel *m_statsPanel;
 };
 
 #endif // ACTIONLISTPANEL_H

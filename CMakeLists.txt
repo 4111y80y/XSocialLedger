@@ -40,6 +40,8 @@ set(PROJECT_SOURCES
     src/UI/WebView2Widget.cpp
     src/UI/ActionListPanel.h
     src/UI/ActionListPanel.cpp
+    src/UI/StatsPanel.h
+    src/UI/StatsPanel.cpp
     # Data
     src/Data/SocialAction.h
     src/Data/DataStorage.h

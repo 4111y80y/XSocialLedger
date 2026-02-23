@@ -22,6 +22,13 @@ public:
 
   bool isCollecting() const { return m_collecting; }
 
+  void setMaxPages(int pages) { m_maxPages = pages; }
+  int maxPages() const { return m_maxPages; }
+
+  void setAutoRefreshInterval(int seconds);
+  int autoRefreshInterval() const { return m_autoRefreshInterval; }
+  void setAutoRefreshEnabled(bool enabled);
+
 signals:
   void newLikeCollected(const QString &userName, const QString &timestamp);
   void newReplyCollected(const QString &userName, const QString &timestamp);
@@ -43,9 +50,12 @@ private:
   WebView2Widget *m_browser;
   DataStorage *m_storage;
   QTimer *m_pollTimer;
+  QTimer *m_autoRefreshTimer;
   bool m_collecting;
   bool m_scriptInjected;
   int m_scrollCount;
+  int m_maxPages;
+  int m_autoRefreshInterval; // seconds
 };
 
 #endif // NOTIFICATIONCOLLECTOR_H

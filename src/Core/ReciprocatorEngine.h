@@ -2,6 +2,7 @@
 #define RECIPROCATORENGINE_H
 
 #include <QObject>
+#include <QPair>
 #include <QTimer>
 
 class WebView2Widget;
@@ -18,17 +19,20 @@ public:
 
   // 开始对指定用户进行点赞回馈
   void startLikeReciprocate(const QString &userHandle, const QString &actionId);
-
-  // 停止当前操作
+  void startBatchReciprocate(const QList<QPair<QString, QString>> &queue);
+  void stopBatch();
   void stop();
 
   bool isBusy() const { return m_busy; }
+  void setBatchInterval(int seconds) { m_batchInterval = seconds; }
 
 signals:
   void reciprocateStarted(const QString &userHandle);
   void reciprocateSuccess(const QString &userHandle, const QString &actionId);
   void reciprocateFailed(const QString &userHandle, const QString &reason);
   void statusMessage(const QString &message);
+  void batchProgress(int done, int total);
+  void batchFinished();
 
 private slots:
   void onPageLoaded(bool success);
@@ -60,6 +64,14 @@ private:
   QString m_currentActionId;
   int m_scrollAttempts;
   int m_maxScrollAttempts;
+
+  // Batch mode
+  QList<QPair<QString, QString>> m_batchQueue;
+  int m_batchDone;
+  int m_batchTotal;
+  int m_batchInterval; // seconds
+  QTimer *m_batchTimer;
+  bool m_batchMode;
 };
 
 #endif // RECIPROCATORENGINE_H

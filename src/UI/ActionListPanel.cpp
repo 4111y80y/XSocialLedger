@@ -1,6 +1,7 @@
 #include "ActionListPanel.h"
 #include "Data/DataStorage.h"
 #include "Data/SocialAction.h"
+#include "StatsPanel.h"
 #include <QAction>
 #include <QDateTime>
 #include <QDebug>
@@ -152,6 +153,12 @@ void ActionListPanel::setupUI() {
   m_tabWidget->addTab(
       m_replyTable,
       QString::fromUtf8("\xf0\x9f\x92\xac \xe5\x9b\x9e\xe5\xa4\x8d"));
+
+  // Stats tab
+  m_statsPanel = new StatsPanel(m_storage, this);
+  m_tabWidget->addTab(
+      m_statsPanel,
+      QString::fromUtf8("\xf0\x9f\x93\x8a \xe7\xbb\x9f\xe8\xae\xa1"));
 
   layout->addWidget(m_tabWidget);
 }

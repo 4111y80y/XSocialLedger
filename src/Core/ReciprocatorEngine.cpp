@@ -8,7 +8,9 @@
 ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
                                        DataStorage *storage, QObject *parent)
     : QObject(parent), m_browser(browser), m_storage(storage), m_state(Idle),
-      m_busy(false), m_scrollAttempts(0), m_maxScrollAttempts(15) {
+      m_busy(false), m_scrollAttempts(0), m_maxScrollAttempts(15),
+      m_batchDone(0), m_batchTotal(0), m_batchInterval(150),
+      m_batchMode(false) {
 
   m_stepTimer = new QTimer(this);
   m_stepTimer->setSingleShot(true);
@@ -16,6 +18,18 @@ ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
           &ReciprocatorEngine::onStepTimer);
   connect(m_browser, &WebView2Widget::loadFinished, this,
           &ReciprocatorEngine::onPageLoaded);
+
+  m_batchTimer = new QTimer(this);
+  m_batchTimer->setSingleShot(true);
+  connect(m_batchTimer, &QTimer::timeout, this, [this]() {
+    if (!m_batchMode || m_batchQueue.isEmpty()) {
+      emit batchFinished();
+      m_batchMode = false;
+      return;
+    }
+    auto next = m_batchQueue.takeFirst();
+    startLikeReciprocate(next.first, next.second);
+  });
 }
 
 ReciprocatorEngine::~ReciprocatorEngine() { stop(); }
@@ -93,12 +107,19 @@ void ReciprocatorEngine::onStepTimer() {
     break;
 
   case WaitingAfterLike:
-    // 点赞完成
-    // 先更新数据，再发信号刷新界面
     m_storage->markReciprocated(m_currentActionId, true);
     emit reciprocateSuccess(m_currentHandle, m_currentActionId);
-    emit statusMessage(QString("✅ 已回馈 @%1 一个赞！").arg(m_currentHandle));
     stop();
+    if (m_batchMode) {
+      m_batchDone++;
+      emit batchProgress(m_batchDone, m_batchTotal);
+      if (m_batchQueue.isEmpty()) {
+        emit batchFinished();
+        m_batchMode = false;
+      } else {
+        m_batchTimer->start(m_batchInterval * 1000);
+      }
+    }
     break;
 
   case ScrollingDown:
@@ -199,4 +220,25 @@ void ReciprocatorEngine::injectScrollScript() {
     setState(ScanningPosts);
     injectScanScript();
   });
+}
+
+void ReciprocatorEngine::startBatchReciprocate(
+    const QList<QPair<QString, QString>> &queue) {
+  if (queue.isEmpty())
+    return;
+  m_batchQueue = queue;
+  m_batchDone = 0;
+  m_batchTotal = queue.size();
+  m_batchMode = true;
+  emit batchProgress(0, m_batchTotal);
+  auto first = m_batchQueue.takeFirst();
+  startLikeReciprocate(first.first, first.second);
+}
+
+void ReciprocatorEngine::stopBatch() {
+  m_batchMode = false;
+  m_batchQueue.clear();
+  m_batchTimer->stop();
+  stop();
+  emit batchFinished();
 }

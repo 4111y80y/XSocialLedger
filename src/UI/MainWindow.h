@@ -4,6 +4,7 @@
 #include <QLabel>
 #include <QMainWindow>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QSplitter>
 
 class WebView2Widget;
@@ -37,6 +38,8 @@ private:
   void setupConnections();
   void saveLayout();
   void restoreLayout();
+  void loadSettings();
+  void saveSettings();
 
   // UI 组件
   QSplitter *m_splitter;
@@ -44,16 +47,19 @@ private:
   WebView2Widget *m_recipBrowser;
   ActionListPanel *m_actionPanel;
 
-  // 工具栏按钮
   QPushButton *m_startBtn;
   QPushButton *m_stopBtn;
   QPushButton *m_refreshBtn;
   QPushButton *m_exportBtn;
+  QPushButton *m_batchBtn;
+  QSpinBox *m_pagesSpin;
+  QSpinBox *m_refreshIntervalSpin;
+  QSpinBox *m_batchIntervalSpin;
 
-  // 状态栏
+  // Status bar
   QLabel *m_statusLabel;
 
-  // 数据和逻辑
+  // Data and logic
   DataStorage *m_storage;
   NotificationCollector *m_collector;
   ReciprocatorEngine *m_reciprocator;

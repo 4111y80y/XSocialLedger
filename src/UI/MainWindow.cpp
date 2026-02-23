@@ -6,6 +6,7 @@
 #include "WebView2Widget.h"
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDateTime>
 #include <QDebug>
 #include <QFile>
 #include <QFileDialog>
@@ -135,14 +136,72 @@ void MainWindow::setupToolBar() {
   m_refreshBtn->setStyleSheet(btnStyle);
   toolbar->addWidget(m_refreshBtn);
 
-  m_exportBtn = new QPushButton("📤 导出数据", this);
+  m_exportBtn = new QPushButton(
+      QString::fromUtf8("\xf0\x9f\x93\xa4 \xe5\xaf\xbc\xe5\x87\xba"), this);
   m_exportBtn->setStyleSheet(btnStyle);
   toolbar->addWidget(m_exportBtn);
 
-  // 弹性空间
+  toolbar->addSeparator();
+
+  // Pages spinbox
+  QLabel *pagesLabel = new QLabel("Pages:", this);
+  pagesLabel->setStyleSheet("color: #a0a0c0;");
+  toolbar->addWidget(pagesLabel);
+  m_pagesSpin = new QSpinBox(this);
+  m_pagesSpin->setRange(1, 50);
+  m_pagesSpin->setValue(5);
+  m_pagesSpin->setStyleSheet(
+      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
+      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
+  toolbar->addWidget(m_pagesSpin);
+
+  // Refresh interval spinbox
+  QLabel *refreshLabel = new QLabel("Refresh(s):", this);
+  refreshLabel->setStyleSheet("color: #a0a0c0;");
+  toolbar->addWidget(refreshLabel);
+  m_refreshIntervalSpin = new QSpinBox(this);
+  m_refreshIntervalSpin->setRange(30, 600);
+  m_refreshIntervalSpin->setValue(150);
+  m_refreshIntervalSpin->setStyleSheet(
+      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
+      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
+  toolbar->addWidget(m_refreshIntervalSpin);
+
+  toolbar->addSeparator();
+
+  // Batch interval spinbox
+  QLabel *batchLabel = new QLabel("Batch(s):", this);
+  batchLabel->setStyleSheet("color: #a0a0c0;");
+  toolbar->addWidget(batchLabel);
+  m_batchIntervalSpin = new QSpinBox(this);
+  m_batchIntervalSpin->setRange(30, 600);
+  m_batchIntervalSpin->setValue(150);
+  m_batchIntervalSpin->setStyleSheet(
+      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
+      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
+  toolbar->addWidget(m_batchIntervalSpin);
+
+  // Batch button
+  m_batchBtn = new QPushButton(
+      QString::fromUtf8(
+          "\xf0\x9f\x9a\x80 \xe6\x89\xb9\xe9\x87\x8f\xe5\x9b\x9e\xe9\xa6\x88"),
+      this);
+  m_batchBtn->setStyleSheet(
+      "QPushButton { background: #e65100; color: #e0e0e0; border: 1px solid "
+      "#ff6d00; border-radius: 6px; padding: 6px 16px; font-size: 13px; "
+      "min-width: 80px; }"
+      "QPushButton:hover { background: #ff6d00; }"
+      "QPushButton:pressed { background: #e65100; }"
+      "QPushButton:disabled { background: #1a1a2e; color: #555566; "
+      "border-color: #2a2a3a; }");
+  toolbar->addWidget(m_batchBtn);
+
+  // Spacer
   QWidget *spacer = new QWidget(this);
   spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   toolbar->addWidget(spacer);
+
+  loadSettings();
 }
 
 void MainWindow::setupConnections() {
@@ -177,8 +236,50 @@ void MainWindow::setupConnections() {
   // 双击回馈
   connect(m_actionPanel, &ActionListPanel::reciprocateLikeRequested, this,
           &MainWindow::onReciprocateLike);
-}
 
+  // Batch signals
+  connect(m_reciprocator, &ReciprocatorEngine::batchProgress, this,
+          [this](int done, int total) {
+            onStatusMessage(QString("Batch: %1/%2").arg(done).arg(total));
+          });
+  connect(m_reciprocator, &ReciprocatorEngine::batchFinished, this,
+          [this]() { m_actionPanel->refreshAll(); });
+
+  // Batch button
+  connect(m_batchBtn, &QPushButton::clicked, this, [this]() {
+    auto likes = m_storage->loadLikes();
+    QDate today = QDate::currentDate();
+    QList<QPair<QString, QString>> pending;
+    for (const auto &a : likes) {
+      if (a.reciprocated)
+        continue;
+      QDateTime dt = QDateTime::fromString(a.timestamp, Qt::ISODate);
+      if (dt.isValid() && dt.toLocalTime().date() == today) {
+        pending.prepend({a.userHandle, a.id});
+      }
+    }
+    if (pending.isEmpty()) {
+      onStatusMessage("No pending likes today.");
+      return;
+    }
+    m_reciprocator->setBatchInterval(m_batchIntervalSpin->value());
+    m_reciprocator->startBatchReciprocate(pending);
+  });
+
+  // Spinbox value changes -> save settings
+  connect(m_pagesSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          [this](int val) {
+            m_collector->setMaxPages(val);
+            saveSettings();
+          });
+  connect(m_refreshIntervalSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+          this, [this](int val) {
+            m_collector->setAutoRefreshInterval(val);
+            saveSettings();
+          });
+  connect(m_batchIntervalSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+          this, [this](int) { saveSettings(); });
+}
 void MainWindow::onStartCollecting() { m_collector->startCollecting(); }
 
 void MainWindow::onStopCollecting() { m_collector->stopCollecting(); }
@@ -291,4 +392,25 @@ void MainWindow::restoreLayout() {
     m_splitter->restoreState(settings.value("splitterSizes").toByteArray());
   }
   qDebug() << "[MainWindow] Layout restored";
+}
+
+void MainWindow::loadSettings() {
+  QSettings settings("XSocialLedger", "XSocialLedger");
+  int pages = settings.value("maxPages", 5).toInt();
+  int refreshInterval = settings.value("refreshInterval", 150).toInt();
+  int batchInterval = settings.value("batchInterval", 150).toInt();
+
+  m_pagesSpin->setValue(pages);
+  m_refreshIntervalSpin->setValue(refreshInterval);
+  m_batchIntervalSpin->setValue(batchInterval);
+
+  m_collector->setMaxPages(pages);
+  m_collector->setAutoRefreshInterval(refreshInterval);
+}
+
+void MainWindow::saveSettings() {
+  QSettings settings("XSocialLedger", "XSocialLedger");
+  settings.setValue("maxPages", m_pagesSpin->value());
+  settings.setValue("refreshInterval", m_refreshIntervalSpin->value());
+  settings.setValue("batchInterval", m_batchIntervalSpin->value());
 }

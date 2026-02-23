@@ -10,12 +10,25 @@ NotificationCollector::NotificationCollector(WebView2Widget *browser,
                                              DataStorage *storage,
                                              QObject *parent)
     : QObject(parent), m_browser(browser), m_storage(storage),
-      m_collecting(false), m_scriptInjected(false), m_scrollCount(0) {
+      m_collecting(false), m_scriptInjected(false), m_scrollCount(0),
+      m_maxPages(5), m_autoRefreshInterval(150) {
 
   m_pollTimer = new QTimer(this);
-  m_pollTimer->setInterval(15000); // 15秒轮询
+  m_pollTimer->setInterval(15000); // 15s polling
   connect(m_pollTimer, &QTimer::timeout, this,
           &NotificationCollector::onPollTimer);
+
+  m_autoRefreshTimer = new QTimer(this);
+  m_autoRefreshTimer->setSingleShot(true);
+  connect(m_autoRefreshTimer, &QTimer::timeout, this, [this]() {
+    if (!m_collecting) {
+      emit statusMessage(QString::fromUtf8(
+          "\xe2\x8f\xb0 "
+          "\xe8\x87\xaa\xe5\x8a\xa8\xe5\x88\xb7\xe6\x96\xb0\xe4\xb8\xad..."));
+      m_browser->Reload();
+      QTimer::singleShot(3000, this, [this]() { startCollecting(); });
+    }
+  });
 
   // 连接浏览器信号
   connect(m_browser, &WebView2Widget::loadFinished, this,
@@ -355,13 +368,32 @@ void NotificationCollector::onPollTimer() {
 }
 
 void NotificationCollector::triggerScroll() {
-  // 每次轮询时触发一次向下滚动
   m_scrollCount++;
+
+  // Check page limit
+  if (m_maxPages > 0 && m_scrollCount >= m_maxPages) {
+    emit statusMessage(
+        QString::fromUtf8(
+            "\xe2\x9c\x85 \xe5\xb7\xb2\xe9\x87\x87\xe9\x9b\x86 %1 "
+            "\xe9\xa1\xb5\xef\xbc\x8c\xe5\x81\x9c\xe6\xad\xa2\xe9\x87\x87\xe9"
+            "\x9b\x86")
+            .arg(m_scrollCount));
+    stopCollecting();
+    // Start auto-refresh timer if enabled
+    if (m_autoRefreshInterval > 0) {
+      m_autoRefreshTimer->start(m_autoRefreshInterval * 1000);
+      emit statusMessage(
+          QString::fromUtf8("\xe2\x8f\xb0 %1 "
+                            "\xe7\xa7\x92\xe5\x90\x8e\xe8\x87\xaa\xe5\x8a\xa8"
+                            "\xe5\x88\xb7\xe6\x96\xb0")
+              .arg(m_autoRefreshInterval));
+    }
+    return;
+  }
 
   QString scrollScript = R"JS(
     (function() {
         window.scrollBy(0, window.innerHeight * 0.8);
-        // 采集当前可见的通知
         if (typeof collectNotifications === 'function') {
             setTimeout(collectNotifications, 1000);
         }
@@ -369,4 +401,15 @@ void NotificationCollector::triggerScroll() {
     )JS";
 
   m_browser->ExecuteJavaScript(scrollScript);
+}
+
+void NotificationCollector::setAutoRefreshInterval(int seconds) {
+  m_autoRefreshInterval = seconds;
+}
+
+void NotificationCollector::setAutoRefreshEnabled(bool enabled) {
+  if (!enabled) {
+    m_autoRefreshTimer->stop();
+    m_autoRefreshInterval = 0;
+  }
 }

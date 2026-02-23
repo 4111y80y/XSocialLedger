@@ -6,7 +6,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
-
 NotificationCollector::NotificationCollector(WebView2Widget *browser,
                                              DataStorage *storage,
                                              QObject *parent)
@@ -82,6 +81,29 @@ void NotificationCollector::injectCollectorScript() {
 
     const seen = new Set();
 
+    // 自动检测当前登录用户的 handle（排除自己）
+    let myHandle = '';
+    const profileLink = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
+    if (profileLink) {
+        const href = profileLink.getAttribute('href') || '';
+        myHandle = href.replace('/', '').toLowerCase();
+    }
+    if (!myHandle) {
+        // 备用方案：从 URL 或页面中查找
+        const navLinks = document.querySelectorAll('nav a[role="link"]');
+        for (const link of navLinks) {
+            const href = link.getAttribute('href') || '';
+            if (href.match(/^\/[a-zA-Z0-9_]+$/) && !href.startsWith('/i/') && 
+                !href.startsWith('/home') && !href.startsWith('/explore') && 
+                !href.startsWith('/search') && !href.startsWith('/notifications') &&
+                !href.startsWith('/messages')) {
+                myHandle = href.replace('/', '').toLowerCase();
+                break;
+            }
+        }
+    }
+    console.log('[DEBUG] Detected my handle: @' + myHandle);
+
     function collectNotifications() {
         const articles = document.querySelectorAll('article[role="article"]');
         let newCount = 0;
@@ -126,6 +148,9 @@ void NotificationCollector::injectCollectorScript() {
                 const name = link.innerText || handle;
 
                 if (!handle || handle.length === 0) return;
+
+                // ★ 排除自己的账号
+                if (myHandle && handle.toLowerCase() === myHandle) return;
 
                 const id = handle + '_' + type + '_' + timestamp;
                 if (seen.has(id)) return;
@@ -173,7 +198,7 @@ void NotificationCollector::injectCollectorScript() {
     const container = document.querySelector('[aria-label]') || document.body;
     observer.observe(container, { childList: true, subtree: true });
 
-    console.log('[DEBUG] XSocialLedger collector script injected');
+    console.log('[DEBUG] XSocialLedger collector script injected (excluding @' + myHandle + ')');
 })();
 )JS";
 

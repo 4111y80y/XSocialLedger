@@ -8,6 +8,7 @@
 #include <QFont>
 #include <QHeaderView>
 #include <QMenu>
+#include <QSettings>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -47,6 +48,21 @@ void ActionListPanel::setupUI() {
       "padding: 6px; background: #16213e; color: #a0d2db; "
       "border-radius: 4px; margin: 2px 4px;");
   layout->addWidget(m_statsLabel);
+
+  // Hide reciprocated checkbox
+  m_hideReciprocatedCheck = new QCheckBox(
+      QString::fromUtf8(
+          "\xe9\x9a\x90\xe8\x97\x8f\xe5\xb7\xb2\xe5\x9b\x9e\xe9\xa6\x88"),
+      this);
+  m_hideReciprocatedCheck->setStyleSheet(
+      "QCheckBox { color: #a0d2db; padding: 4px 8px; }"
+      "QCheckBox::indicator { width: 16px; height: 16px; }");
+  loadHideReciprocatedSetting();
+  connect(m_hideReciprocatedCheck, &QCheckBox::toggled, this, [this](bool) {
+    saveHideReciprocatedSetting();
+    refreshAll();
+  });
+  layout->addWidget(m_hideReciprocatedCheck);
 
   // Tab 页
   m_tabWidget = new QTabWidget(this);
@@ -153,6 +169,14 @@ void ActionListPanel::populateTable(QTableWidget *table, const QString &type) {
             [](const SocialAction &a, const SocialAction &b) {
               return a.timestamp > b.timestamp;
             });
+
+  // Filter out reciprocated if checkbox is checked
+  if (m_hideReciprocatedCheck && m_hideReciprocatedCheck->isChecked()) {
+    actions.erase(
+        std::remove_if(actions.begin(), actions.end(),
+                       [](const SocialAction &a) { return a.reciprocated; }),
+        actions.end());
+  }
 
   table->setRowCount(actions.size());
 
@@ -336,4 +360,15 @@ void ActionListPanel::onReplyContextMenu(const QPoint &pos) {
 
 void ActionListPanel::onMarkReciprocated(const QString &actionId) {
   // Already handled in context menu
+}
+
+void ActionListPanel::loadHideReciprocatedSetting() {
+  QSettings settings("XSocialLedger", "XSocialLedger");
+  bool hide = settings.value("hideReciprocated", true).toBool();
+  m_hideReciprocatedCheck->setChecked(hide);
+}
+
+void ActionListPanel::saveHideReciprocatedSetting() {
+  QSettings settings("XSocialLedger", "XSocialLedger");
+  settings.setValue("hideReciprocated", m_hideReciprocatedCheck->isChecked());
 }

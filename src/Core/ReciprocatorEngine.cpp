@@ -5,7 +5,6 @@
 #include <QDebug>
 #include <QRandomGenerator>
 
-
 ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
                                        DataStorage *storage, QObject *parent)
     : QObject(parent), m_browser(browser), m_storage(storage), m_state(Idle),
@@ -95,9 +94,10 @@ void ReciprocatorEngine::onStepTimer() {
 
   case WaitingAfterLike:
     // 点赞完成
+    // 先更新数据，再发信号刷新界面
+    m_storage->markReciprocated(m_currentActionId, true);
     emit reciprocateSuccess(m_currentHandle, m_currentActionId);
     emit statusMessage(QString("✅ 已回馈 @%1 一个赞！").arg(m_currentHandle));
-    m_storage->markReciprocated(m_currentActionId, true);
     stop();
     break;
 

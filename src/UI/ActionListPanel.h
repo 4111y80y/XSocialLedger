@@ -1,6 +1,7 @@
 #ifndef ACTIONLISTPANEL_H
 #define ACTIONLISTPANEL_H
 
+#include <QCheckBox>
 #include <QLabel>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -40,12 +41,15 @@ private slots:
 private:
   void setupUI();
   void populateTable(QTableWidget *table, const QString &type);
+  void loadHideReciprocatedSetting();
+  void saveHideReciprocatedSetting();
 
   DataStorage *m_storage;
   QTabWidget *m_tabWidget;
   QTableWidget *m_likeTable;
   QTableWidget *m_replyTable;
   QLabel *m_statsLabel;
+  QCheckBox *m_hideReciprocatedCheck;
 };
 
 #endif // ACTIONLISTPANEL_H

@@ -47,6 +47,8 @@ set(PROJECT_SOURCES
     # Core
     src/Core/NotificationCollector.h
     src/Core/NotificationCollector.cpp
+    src/Core/ReciprocatorEngine.h
+    src/Core/ReciprocatorEngine.cpp
 )
 
 # Create executable

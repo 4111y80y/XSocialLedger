@@ -10,6 +10,7 @@ class WebView2Widget;
 class ActionListPanel;
 class DataStorage;
 class NotificationCollector;
+class ReciprocatorEngine;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -28,6 +29,7 @@ private slots:
   void onExportData();
   void onStatusMessage(const QString &message);
   void onCollectingStateChanged(bool collecting);
+  void onReciprocateLike(const QString &userHandle, const QString &actionId);
 
 private:
   void setupUI();
@@ -39,6 +41,7 @@ private:
   // UI 组件
   QSplitter *m_splitter;
   WebView2Widget *m_browser;
+  WebView2Widget *m_recipBrowser;
   ActionListPanel *m_actionPanel;
 
   // 工具栏按钮
@@ -53,6 +56,7 @@ private:
   // 数据和逻辑
   DataStorage *m_storage;
   NotificationCollector *m_collector;
+  ReciprocatorEngine *m_reciprocator;
 };
 
 #endif // MAINWINDOW_H

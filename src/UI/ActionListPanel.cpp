@@ -12,7 +12,6 @@
 #include <QVBoxLayout>
 #include <algorithm>
 
-
 ActionListPanel::ActionListPanel(DataStorage *storage, QWidget *parent)
     : QWidget(parent), m_storage(storage) {
   setupUI();
@@ -79,6 +78,19 @@ void ActionListPanel::setupUI() {
       "  padding: 4px; border: 1px solid #2a2a4a; }");
   connect(m_likeTable, &QTableWidget::customContextMenuRequested, this,
           &ActionListPanel::onLikeContextMenu);
+  connect(m_likeTable, &QTableWidget::cellDoubleClicked, this,
+          [this](int row, int) {
+            QTableWidgetItem *userItem = m_likeTable->item(row, 0);
+            QTableWidgetItem *statusItem = m_likeTable->item(row, 3);
+            if (!userItem || !statusItem)
+              return;
+            // 只对“待回馋”的记录触发
+            if (statusItem->text().contains("待回馋")) {
+              QString actionId = userItem->data(Qt::UserRole).toString();
+              QString userHandle = userItem->data(Qt::UserRole + 1).toString();
+              emit reciprocateLikeRequested(userHandle, actionId);
+            }
+          });
   m_tabWidget->addTab(m_likeTable, "❤️ 点赞");
 
   // 回复表格

@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "ActionListPanel.h"
 #include "Core/NotificationCollector.h"
+#include "Core/ReciprocatorEngine.h"
 #include "Data/DataStorage.h"
 #include "WebView2Widget.h"
 #include <QApplication>
@@ -60,21 +61,31 @@ void MainWindow::setupUI() {
 
   // 左侧 - 浏览器
   m_browser = new WebView2Widget(m_splitter);
-  m_browser->setMinimumWidth(600);
+  m_browser->setMinimumWidth(400);
 
-  // 右侧 - 记录面板
+  // 中间 - 记录面板
   m_actionPanel = new ActionListPanel(m_storage, m_splitter);
-  m_actionPanel->setMinimumWidth(350);
+  m_actionPanel->setMinimumWidth(300);
+
+  // 右侧 - 回馋浏览器
+  m_recipBrowser = new WebView2Widget(m_splitter);
+  m_recipBrowser->setMinimumWidth(400);
 
   m_splitter->addWidget(m_browser);
   m_splitter->addWidget(m_actionPanel);
-  m_splitter->setStretchFactor(0, 7); // 浏览器 70%
+  m_splitter->addWidget(m_recipBrowser);
+  m_splitter->setStretchFactor(0, 4); // 浏览器 40%
   m_splitter->setStretchFactor(1, 3); // 面板 30%
+  m_splitter->setStretchFactor(2, 3); // 回馋浏览器 30%
 
   setCentralWidget(m_splitter);
 
   // 创建采集器
   m_collector = new NotificationCollector(m_browser, m_storage, this);
+
+  // 创建回馋引擎
+  m_recipBrowser->CreateBrowser("https://x.com");
+  m_reciprocator = new ReciprocatorEngine(m_recipBrowser, m_storage, this);
 
   // 状态栏
   m_statusLabel = new QLabel("就绪", this);
@@ -154,6 +165,18 @@ void MainWindow::setupConnections() {
           &ActionListPanel::onNewReply);
   connect(m_collector, &NotificationCollector::selfRecordsCleaned,
           m_actionPanel, [this](int) { m_actionPanel->refreshAll(); });
+
+  // 回馈引擎信号
+  connect(m_reciprocator, &ReciprocatorEngine::statusMessage, this,
+          &MainWindow::onStatusMessage);
+  connect(m_reciprocator, &ReciprocatorEngine::reciprocateSuccess, this,
+          [this](const QString &, const QString &) {
+            m_actionPanel->refreshAll();
+          });
+
+  // 双击回馈
+  connect(m_actionPanel, &ActionListPanel::reciprocateLikeRequested, this,
+          &MainWindow::onReciprocateLike);
 }
 
 void MainWindow::onStartCollecting() { m_collector->startCollecting(); }
@@ -235,7 +258,17 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   }
 
   m_browser->CloseBrowser();
+  m_recipBrowser->CloseBrowser();
   event->accept();
+}
+
+void MainWindow::onReciprocateLike(const QString &userHandle,
+                                   const QString &actionId) {
+  if (m_reciprocator->isBusy()) {
+    onStatusMessage("回馋引擎忙碌中，请等待当前任务完成...");
+    return;
+  }
+  m_reciprocator->startLikeReciprocate(userHandle, actionId);
 }
 
 void MainWindow::saveLayout() {

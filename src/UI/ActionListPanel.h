@@ -6,7 +6,6 @@
 #include <QTableWidget>
 #include <QWidget>
 
-
 class DataStorage;
 
 // 社交互动记录面板 (右侧面板)
@@ -28,6 +27,10 @@ public:
 public slots:
   void onNewLike(const QString &userName, const QString &timestamp);
   void onNewReply(const QString &userName, const QString &timestamp);
+
+signals:
+  void reciprocateLikeRequested(const QString &userHandle,
+                                const QString &actionId);
 
 private slots:
   void onLikeContextMenu(const QPoint &pos);

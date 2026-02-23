@@ -1,0 +1,42 @@
+# Build output
+build/
+cmake-build-*/
+
+# IDE
+.qtcreator/
+.vscode/
+.idea/
+*.user
+*.user.*
+
+# Runtime data
+userdata/
+data/
+
+# Compiled
+*.o
+*.obj
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Large binary files in third_party
+third_party/webview2/webview2.zip
+third_party/webview2/WebView2.tlb
+third_party/webview2/WebView2.idl
+third_party/webview2/lib/
+third_party/webview2/lib_manual/
+third_party/webview2/runtimes/
+third_party/webview2/tools/
+third_party/webview2/package/
+third_party/webview2/_rels/
+third_party/webview2/buildTransitive/
+third_party/webview2/.signature.p7s
+third_party/webview2/[Content_Types].xml

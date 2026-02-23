@@ -1,0 +1,48 @@
+#ifndef ACTIONLISTPANEL_H
+#define ACTIONLISTPANEL_H
+
+#include <QLabel>
+#include <QTabWidget>
+#include <QTableWidget>
+#include <QWidget>
+
+
+class DataStorage;
+
+// 社交互动记录面板 (右侧面板)
+class ActionListPanel : public QWidget {
+  Q_OBJECT
+
+public:
+  explicit ActionListPanel(DataStorage *storage, QWidget *parent = nullptr);
+  ~ActionListPanel();
+
+  // 刷新列表
+  void refreshLikes();
+  void refreshReplies();
+  void refreshAll();
+
+  // 更新统计
+  void updateStats();
+
+public slots:
+  void onNewLike(const QString &userName, const QString &timestamp);
+  void onNewReply(const QString &userName, const QString &timestamp);
+
+private slots:
+  void onLikeContextMenu(const QPoint &pos);
+  void onReplyContextMenu(const QPoint &pos);
+  void onMarkReciprocated(const QString &actionId);
+
+private:
+  void setupUI();
+  void populateTable(QTableWidget *table, const QString &type);
+
+  DataStorage *m_storage;
+  QTabWidget *m_tabWidget;
+  QTableWidget *m_likeTable;
+  QTableWidget *m_replyTable;
+  QLabel *m_statsLabel;
+};
+
+#endif // ACTIONLISTPANEL_H

@@ -25,8 +25,9 @@ public:
   void setMaxPages(int pages) { m_maxPages = pages; }
   int maxPages() const { return m_maxPages; }
 
-  void setAutoRefreshInterval(int seconds);
-  int autoRefreshInterval() const { return m_autoRefreshInterval; }
+  void setAutoRefreshRange(int minSec, int maxSec);
+  int refreshMinInterval() const { return m_refreshMinInterval; }
+  int refreshMaxInterval() const { return m_refreshMaxInterval; }
   void setAutoRefreshEnabled(bool enabled);
 
 signals:
@@ -35,6 +36,7 @@ signals:
   void collectingStateChanged(bool collecting);
   void statusMessage(const QString &message);
   void selfRecordsCleaned(int removedCount);
+  void refreshCountdown(int secondsRemaining);
 
 private slots:
   void onPageLoaded(bool success);
@@ -55,7 +57,8 @@ private:
   bool m_scriptInjected;
   int m_scrollCount;
   int m_maxPages;
-  int m_autoRefreshInterval; // seconds
+  int m_refreshMinInterval;
+  int m_refreshMaxInterval;
   QTimer *m_countdownTimer;
   int m_countdownRemaining;
 };

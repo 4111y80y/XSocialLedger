@@ -5,13 +5,15 @@
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRandomGenerator>
 
 NotificationCollector::NotificationCollector(WebView2Widget *browser,
                                              DataStorage *storage,
                                              QObject *parent)
     : QObject(parent), m_browser(browser), m_storage(storage),
       m_collecting(false), m_scriptInjected(false), m_scrollCount(0),
-      m_maxPages(5), m_autoRefreshInterval(150), m_countdownRemaining(0) {
+      m_maxPages(5), m_refreshMinInterval(60), m_refreshMaxInterval(120),
+      m_countdownRemaining(0) {
 
   m_pollTimer = new QTimer(this);
   m_pollTimer->setInterval(15000); // 15s polling
@@ -36,11 +38,7 @@ NotificationCollector::NotificationCollector(WebView2Widget *browser,
   connect(m_countdownTimer, &QTimer::timeout, this, [this]() {
     m_countdownRemaining--;
     if (m_countdownRemaining > 0) {
-      emit statusMessage(
-          QString::fromUtf8("\xe2\x8f\xb3 "
-                            "\xe8\x87\xaa\xe5\x8a\xa8\xe5\x88\xb7\xe6\x96\xb0"
-                            "\xe5\x80\x92\xe8\xae\xa1\xe6\x97\xb6: %1s")
-              .arg(m_countdownRemaining));
+      emit refreshCountdown(m_countdownRemaining);
     }
   });
 
@@ -389,9 +387,12 @@ void NotificationCollector::triggerScroll() {
     m_pollTimer->stop();
     m_scriptInjected = false;
     // Start auto-refresh timer if enabled
-    if (m_autoRefreshInterval > 0) {
-      m_autoRefreshTimer->start(m_autoRefreshInterval * 1000);
-      m_countdownRemaining = m_autoRefreshInterval;
+    if (m_refreshMinInterval > 0) {
+      int interval = m_refreshMinInterval +
+                     QRandomGenerator::global()->bounded(
+                         m_refreshMaxInterval - m_refreshMinInterval + 1);
+      m_autoRefreshTimer->start(interval * 1000);
+      m_countdownRemaining = interval;
       m_countdownTimer->start();
       emit statusMessage(
           QString::fromUtf8("\xe2\x8f\xb3 "
@@ -422,13 +423,15 @@ void NotificationCollector::triggerScroll() {
   m_browser->ExecuteJavaScript(scrollScript);
 }
 
-void NotificationCollector::setAutoRefreshInterval(int seconds) {
-  m_autoRefreshInterval = seconds;
+void NotificationCollector::setAutoRefreshRange(int minSec, int maxSec) {
+  m_refreshMinInterval = minSec;
+  m_refreshMaxInterval = maxSec;
 }
 
 void NotificationCollector::setAutoRefreshEnabled(bool enabled) {
   if (!enabled) {
     m_autoRefreshTimer->stop();
-    m_autoRefreshInterval = 0;
+    m_refreshMinInterval = 0;
+    m_refreshMaxInterval = 0;
   }
 }

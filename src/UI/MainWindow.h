@@ -40,6 +40,7 @@ private:
   void restoreLayout();
   void loadSettings();
   void saveSettings();
+  void updateCountdownLabel();
 
   // UI 组件
   QSplitter *m_splitter;
@@ -53,11 +54,16 @@ private:
   QPushButton *m_exportBtn;
   QPushButton *m_batchBtn;
   QSpinBox *m_pagesSpin;
-  QSpinBox *m_refreshIntervalSpin;
-  QSpinBox *m_batchIntervalSpin;
+  QSpinBox *m_refreshMinSpin;
+  QSpinBox *m_refreshMaxSpin;
+  QSpinBox *m_batchMinSpin;
+  QSpinBox *m_batchMaxSpin;
 
   // Status bar
   QLabel *m_statusLabel;
+  QLabel *m_countdownLabel;
+  int m_refreshCountdown;
+  int m_batchCountdown;
 
   // Data and logic
   DataStorage *m_storage;

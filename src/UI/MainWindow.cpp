@@ -94,8 +94,14 @@ void MainWindow::setupUI() {
       new QLabel(QString::fromUtf8("\xe5\xb0\xb1\xe7\xbb\xaa"), this);
   m_statusLabel->setStyleSheet(
       "QLabel { color: #e0e0e0; font-size: 13px; padding: 2px 8px; }");
+  m_countdownLabel = new QLabel("", this);
+  m_countdownLabel->setStyleSheet(
+      "QLabel { color: #ffcc00; font-size: 13px; padding: 2px 8px; }");
+  m_refreshCountdown = 0;
+  m_batchCountdown = 0;
   statusBar()->setStyleSheet("QStatusBar { background: #0f0f23; color: "
                              "#e0e0e0; border-top: 1px solid #2a2a4a; }");
+  statusBar()->addPermanentWidget(m_countdownLabel);
   statusBar()->addPermanentWidget(m_statusLabel);
 }
 
@@ -161,31 +167,57 @@ void MainWindow::setupToolBar() {
       "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
   toolbar->addWidget(m_pagesSpin);
 
-  // Refresh interval spinbox
-  QLabel *refreshLabel = new QLabel("Refresh(s):", this);
+  // Refresh interval range
+  QLabel *refreshLabel =
+      new QLabel(QString::fromUtf8("\xe5\x88\xb7\xe6\x96\xb0:"), this);
   refreshLabel->setStyleSheet("color: #a0a0c0;");
   toolbar->addWidget(refreshLabel);
-  m_refreshIntervalSpin = new QSpinBox(this);
-  m_refreshIntervalSpin->setRange(30, 600);
-  m_refreshIntervalSpin->setValue(150);
-  m_refreshIntervalSpin->setStyleSheet(
+  m_refreshMinSpin = new QSpinBox(this);
+  m_refreshMinSpin->setRange(10, 600);
+  m_refreshMinSpin->setValue(60);
+  m_refreshMinSpin->setSuffix("s");
+  m_refreshMinSpin->setStyleSheet(
       "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
       "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
-  toolbar->addWidget(m_refreshIntervalSpin);
+  toolbar->addWidget(m_refreshMinSpin);
+  QLabel *refreshDash = new QLabel("-", this);
+  refreshDash->setStyleSheet("color: #a0a0c0;");
+  toolbar->addWidget(refreshDash);
+  m_refreshMaxSpin = new QSpinBox(this);
+  m_refreshMaxSpin->setRange(10, 600);
+  m_refreshMaxSpin->setValue(120);
+  m_refreshMaxSpin->setSuffix("s");
+  m_refreshMaxSpin->setStyleSheet(
+      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
+      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
+  toolbar->addWidget(m_refreshMaxSpin);
 
   toolbar->addSeparator();
 
-  // Batch interval spinbox
-  QLabel *batchLabel = new QLabel("Batch(s):", this);
+  // Batch interval range
+  QLabel *batchLabel =
+      new QLabel(QString::fromUtf8("\xe5\x9b\x9e\xe9\xa6\x88:"), this);
   batchLabel->setStyleSheet("color: #a0a0c0;");
   toolbar->addWidget(batchLabel);
-  m_batchIntervalSpin = new QSpinBox(this);
-  m_batchIntervalSpin->setRange(30, 600);
-  m_batchIntervalSpin->setValue(150);
-  m_batchIntervalSpin->setStyleSheet(
+  m_batchMinSpin = new QSpinBox(this);
+  m_batchMinSpin->setRange(30, 600);
+  m_batchMinSpin->setValue(120);
+  m_batchMinSpin->setSuffix("s");
+  m_batchMinSpin->setStyleSheet(
       "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
       "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
-  toolbar->addWidget(m_batchIntervalSpin);
+  toolbar->addWidget(m_batchMinSpin);
+  QLabel *batchDash = new QLabel("-", this);
+  batchDash->setStyleSheet("color: #a0a0c0;");
+  toolbar->addWidget(batchDash);
+  m_batchMaxSpin = new QSpinBox(this);
+  m_batchMaxSpin->setRange(30, 600);
+  m_batchMaxSpin->setValue(180);
+  m_batchMaxSpin->setSuffix("s");
+  m_batchMaxSpin->setStyleSheet(
+      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
+      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
+  toolbar->addWidget(m_batchMaxSpin);
 
   // Batch button
   m_batchBtn = new QPushButton(
@@ -259,18 +291,32 @@ void MainWindow::setupConnections() {
         "QPushButton:hover { background: #ff6d00; }");
   });
 
+  // Countdown signals -> combined label
+  connect(m_collector, &NotificationCollector::refreshCountdown, this,
+          [this](int sec) {
+            m_refreshCountdown = sec;
+            updateCountdownLabel();
+          });
+  connect(m_reciprocator, &ReciprocatorEngine::batchCountdownTick, this,
+          [this](int sec) {
+            m_batchCountdown = sec;
+            updateCountdownLabel();
+          });
+
   // Batch button - toggle start/stop
   connect(m_batchBtn, &QPushButton::clicked, this, [this]() {
     // If batch is running, stop it
     if (m_reciprocator->isBusy()) {
       m_reciprocator->stopBatch();
+      m_batchCountdown = 0;
+      updateCountdownLabel();
       return;
     }
     auto likes = m_storage->loadLikes();
     QList<QPair<QString, QString>> pending;
     for (const auto &a : likes) {
       if (!a.reciprocated) {
-        pending.prepend({a.userHandle, a.id});
+        pending.append({a.userHandle, a.id});
       }
     }
     if (pending.isEmpty()) {
@@ -279,7 +325,8 @@ void MainWindow::setupConnections() {
           "\xe7\x9a\x84\xe7\x82\xb9\xe8\xb5\x9e"));
       return;
     }
-    m_reciprocator->setBatchInterval(m_batchIntervalSpin->value());
+    m_reciprocator->setBatchInterval(m_batchMinSpin->value(),
+                                     m_batchMaxSpin->value());
     m_reciprocator->startBatchReciprocate(pending);
     // Toggle button to stop mode
     m_batchBtn->setText(QString::fromUtf8(
@@ -297,19 +344,30 @@ void MainWindow::setupConnections() {
             .arg(pending.size()));
   });
 
-  // Spinbox value changes -> save settings
+  // Spinbox value changes -> save settings and apply immediately
   connect(m_pagesSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
           [this](int val) {
             m_collector->setMaxPages(val);
             saveSettings();
           });
-  connect(m_refreshIntervalSpin, QOverload<int>::of(&QSpinBox::valueChanged),
-          this, [this](int val) {
-            m_collector->setAutoRefreshInterval(val);
-            saveSettings();
-          });
-  connect(m_batchIntervalSpin, QOverload<int>::of(&QSpinBox::valueChanged),
-          this, [this](int) { saveSettings(); });
+  auto updateRefreshRange = [this]() {
+    m_collector->setAutoRefreshRange(m_refreshMinSpin->value(),
+                                     m_refreshMaxSpin->value());
+    saveSettings();
+  };
+  connect(m_refreshMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateRefreshRange);
+  connect(m_refreshMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateRefreshRange);
+  auto updateBatchRange = [this]() {
+    m_reciprocator->setBatchInterval(m_batchMinSpin->value(),
+                                     m_batchMaxSpin->value());
+    saveSettings();
+  };
+  connect(m_batchMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateBatchRange);
+  connect(m_batchMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateBatchRange);
 }
 void MainWindow::onStartCollecting() { m_collector->startCollecting(); }
 
@@ -428,20 +486,40 @@ void MainWindow::restoreLayout() {
 void MainWindow::loadSettings() {
   QSettings settings("XSocialLedger", "XSocialLedger");
   int pages = settings.value("maxPages", 5).toInt();
-  int refreshInterval = settings.value("refreshInterval", 150).toInt();
-  int batchInterval = settings.value("batchInterval", 150).toInt();
+  int refreshMin = settings.value("refreshMin", 60).toInt();
+  int refreshMax = settings.value("refreshMax", 120).toInt();
+  int batchMin = settings.value("batchMin", 120).toInt();
+  int batchMax = settings.value("batchMax", 180).toInt();
 
   m_pagesSpin->setValue(pages);
-  m_refreshIntervalSpin->setValue(refreshInterval);
-  m_batchIntervalSpin->setValue(batchInterval);
+  m_refreshMinSpin->setValue(refreshMin);
+  m_refreshMaxSpin->setValue(refreshMax);
+  m_batchMinSpin->setValue(batchMin);
+  m_batchMaxSpin->setValue(batchMax);
 
   m_collector->setMaxPages(pages);
-  m_collector->setAutoRefreshInterval(refreshInterval);
+  m_collector->setAutoRefreshRange(refreshMin, refreshMax);
+  m_reciprocator->setBatchInterval(batchMin, batchMax);
 }
 
 void MainWindow::saveSettings() {
   QSettings settings("XSocialLedger", "XSocialLedger");
   settings.setValue("maxPages", m_pagesSpin->value());
-  settings.setValue("refreshInterval", m_refreshIntervalSpin->value());
-  settings.setValue("batchInterval", m_batchIntervalSpin->value());
+  settings.setValue("refreshMin", m_refreshMinSpin->value());
+  settings.setValue("refreshMax", m_refreshMaxSpin->value());
+  settings.setValue("batchMin", m_batchMinSpin->value());
+  settings.setValue("batchMax", m_batchMaxSpin->value());
+}
+
+void MainWindow::updateCountdownLabel() {
+  QStringList parts;
+  if (m_refreshCountdown > 0) {
+    parts << QString::fromUtf8("\xe2\x8f\xb3\xe5\x88\xb7\xe6\x96\xb0:%1s")
+                 .arg(m_refreshCountdown);
+  }
+  if (m_batchCountdown > 0) {
+    parts << QString::fromUtf8("\xe2\x8f\xb3\xe5\x9b\x9e\xe9\xa6\x88:%1s")
+                 .arg(m_batchCountdown);
+  }
+  m_countdownLabel->setText(parts.join("  "));
 }

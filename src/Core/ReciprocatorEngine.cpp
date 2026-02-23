@@ -9,8 +9,9 @@ ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
                                        DataStorage *storage, QObject *parent)
     : QObject(parent), m_browser(browser), m_storage(storage), m_state(Idle),
       m_busy(false), m_scrollAttempts(0), m_maxScrollAttempts(15),
-      m_batchDone(0), m_batchTotal(0), m_batchInterval(150),
-      m_batchCountdownRemaining(0), m_batchMode(false) {
+      m_batchDone(0), m_batchTotal(0), m_batchMinInterval(120),
+      m_batchMaxInterval(180), m_batchCountdownRemaining(0),
+      m_batchMode(false) {
 
   m_stepTimer = new QTimer(this);
   m_stepTimer->setSingleShot(true);
@@ -37,13 +38,7 @@ ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
   connect(m_batchCountdownTimer, &QTimer::timeout, this, [this]() {
     m_batchCountdownRemaining--;
     if (m_batchCountdownRemaining > 0) {
-      emit statusMessage(
-          QString::fromUtf8("\xe2\x8f\xb3 "
-                            "\xe5\x9b\x9e\xe9\xa6\x88\xe5\x80\x92\xe8\xae\xa1"
-                            "\xe6\x97\xb6: %1s (%2/%3)")
-              .arg(m_batchCountdownRemaining)
-              .arg(m_batchDone + 1)
-              .arg(m_batchTotal));
+      emit batchCountdownTick(m_batchCountdownRemaining);
     }
   });
 }
@@ -53,7 +48,9 @@ ReciprocatorEngine::~ReciprocatorEngine() { stop(); }
 void ReciprocatorEngine::startLikeReciprocate(const QString &userHandle,
                                               const QString &actionId) {
   if (m_busy) {
-    emit statusMessage("回馈引擎忙碌中，请稍后...");
+    emit statusMessage(QString::fromUtf8(
+        "\xe5\x9b\x9e\xe9\xa6\x88\xe5\xbc\x95\xe6\x93\x8e\xe5\xbf\x99\xe7\xa2"
+        "\x8c\xe4\xb8\xad\xef\xbc\x8c\xe8\xaf\xb7\xe7\xa8\x8d\xe5\x90\x8e..."));
     return;
   }
 
@@ -63,9 +60,13 @@ void ReciprocatorEngine::startLikeReciprocate(const QString &userHandle,
   m_busy = true;
 
   emit reciprocateStarted(userHandle);
-  emit statusMessage(QString("🔄 开始回馈 @%1 ...").arg(userHandle));
+  emit statusMessage(
+      QString::fromUtf8(
+          "\xf0\x9f\x94\x84 \xe5\xbc\x80\xe5\xa7\x8b\xe5\x9b\x9e\xe9\xa6\x88 "
+          "@%1 ...")
+          .arg(userHandle));
 
-  // 导航到用户主页
+  // Navigate to user profile
   QString url = "https://x.com/" + userHandle;
   setState(NavigatingToProfile);
   m_browser->LoadUrl(url);
@@ -87,15 +88,21 @@ void ReciprocatorEngine::onPageLoaded(bool success) {
 
   if (m_state == NavigatingToProfile) {
     if (!success) {
-      emit reciprocateFailed(m_currentHandle, "页面加载失败");
+      emit reciprocateFailed(
+          m_currentHandle,
+          QString::fromUtf8("\xe9\xa1\xb5\xe9\x9d\xa2\xe5\x8a\xa0\xe8\xbd\xbd"
+                            "\xe5\xa4\xb1\xe8\xb4\xa5"));
       stop();
       return;
     }
 
     emit statusMessage(
-        QString("已进入 @%1 主页，等待帖子加载...").arg(m_currentHandle));
+        QString::fromUtf8(
+            "\xe5\xb7\xb2\xe8\xbf\x9b\xe5\x85\xa5 @%1 "
+            "\xe4\xb8\xbb\xe9\xa1\xb5\xef\xbc\x8c\xe7\xad\x89\xe5\xbe\x85\xe5"
+            "\xb8\x96\xe5\xad\x90\xe5\x8a\xa0\xe8\xbd\xbd...")
+            .arg(m_currentHandle));
     setState(WaitingForTimeline);
-    // 等待页面内容加载（3-5秒随机延迟，模拟人工操作）
     int delay = 3000 + QRandomGenerator::global()->bounded(2000);
     m_stepTimer->start(delay);
   }
@@ -107,13 +114,11 @@ void ReciprocatorEngine::onStepTimer() {
 
   switch (m_state) {
   case WaitingForTimeline:
-    // 页面加载完成，开始扫描帖子
     setState(ScanningPosts);
     injectScanScript();
     break;
 
   case ScanningPosts:
-    // 扫描后需要滚动找更多
     setState(ScrollingDown);
     injectScrollScript();
     break;
@@ -133,8 +138,12 @@ void ReciprocatorEngine::onStepTimer() {
         emit batchFinished();
         m_batchMode = false;
       } else {
-        m_batchTimer->start(m_batchInterval * 1000);
-        m_batchCountdownRemaining = m_batchInterval;
+        // Random interval for next batch item
+        int interval = m_batchMinInterval +
+                       QRandomGenerator::global()->bounded(
+                           m_batchMaxInterval - m_batchMinInterval + 1);
+        m_batchTimer->start(interval * 1000);
+        m_batchCountdownRemaining = interval;
         m_batchCountdownTimer->start();
       }
     }
@@ -150,7 +159,6 @@ void ReciprocatorEngine::onStepTimer() {
 }
 
 void ReciprocatorEngine::injectScanScript() {
-  // 扫描页面上的帖子，找到第一个未点赞的，滚动到它
   QString script = R"JS(
 (function() {
     const articles = document.querySelectorAll('article[data-testid="tweet"]');
@@ -168,19 +176,16 @@ void ReciprocatorEngine::injectScanScript() {
 
   m_browser->ExecuteJavaScript(script);
 
-  // 等待扫描完成后进入下一步
   int delay = 2000 + QRandomGenerator::global()->bounded(1000);
   QTimer::singleShot(delay, this, [this]() {
     if (!m_busy)
       return;
-    // 尝试点赞
     setState(ClickingLike);
     m_stepTimer->start(500);
   });
 }
 
 void ReciprocatorEngine::injectClickScript() {
-  // 点击第一个未点赞的按钮
   QString script = R"JS(
 (function() {
     const articles = document.querySelectorAll('article[data-testid="tweet"]');
@@ -192,14 +197,12 @@ void ReciprocatorEngine::injectClickScript() {
             return;
         }
     }
-    // 没找到可点赞的帖子，可能需要继续滚动
     console.log('[RECIPROCATE_NOCLICK]');
 })();
 )JS";
 
   m_browser->ExecuteJavaScript(script);
 
-  // 等待点赞生效，加随机延迟模拟人工
   int waitAfterLike = 2500 + QRandomGenerator::global()->bounded(2000);
   setState(WaitingAfterLike);
   m_stepTimer->start(waitAfterLike);
@@ -208,20 +211,31 @@ void ReciprocatorEngine::injectClickScript() {
 void ReciprocatorEngine::injectScrollScript() {
   m_scrollAttempts++;
   if (m_scrollAttempts > m_maxScrollAttempts) {
-    emit reciprocateFailed(m_currentHandle, "滚动次数超限，未找到可点赞帖子");
-    emit statusMessage(QString("❌ @%1 滚动%2次仍未找到可点赞的帖子")
-                           .arg(m_currentHandle)
-                           .arg(m_maxScrollAttempts));
+    emit reciprocateFailed(
+        m_currentHandle,
+        QString::fromUtf8("\xe6\xbb\x9a\xe5\x8a\xa8\xe6\xac\xa1\xe6\x95\xb0\xe8"
+                          "\xb6\x85\xe9\x99\x90"));
+    emit statusMessage(
+        QString::fromUtf8("\xe2\x9d\x8c @%1 "
+                          "\xe6\xbb\x9a\xe5\x8a\xa8%"
+                          "2\xe6\xac\xa1\xe4\xbb\x8d\xe6\x9c\xaa\xe6\x89\xbe"
+                          "\xe5\x88\xb0\xe5\x8f\xaf\xe7\x82\xb9\xe8\xb5\x9e\xe7"
+                          "\x9a\x84\xe5\xb8\x96\xe5\xad\x90")
+            .arg(m_currentHandle)
+            .arg(m_maxScrollAttempts));
     stop();
     return;
   }
 
-  emit statusMessage(QString("📜 向下滚动查找 @%1 的帖子 (%2/%3)...")
-                         .arg(m_currentHandle)
-                         .arg(m_scrollAttempts)
-                         .arg(m_maxScrollAttempts));
+  emit statusMessage(
+      QString::fromUtf8(
+          "\xf0\x9f\x93\x9c "
+          "\xe5\x90\x91\xe4\xb8\x8b\xe6\xbb\x9a\xe5\x8a\xa8\xe6\x9f\xa5\xe6\x89"
+          "\xbe @%1 \xe7\x9a\x84\xe5\xb8\x96\xe5\xad\x90 (%2/%3)...")
+          .arg(m_currentHandle)
+          .arg(m_scrollAttempts)
+          .arg(m_maxScrollAttempts));
 
-  // 向下滚动并寻找未点赞帖子
   QString script = R"JS(
 (function() {
     window.scrollBy(0, 600);
@@ -230,7 +244,6 @@ void ReciprocatorEngine::injectScrollScript() {
 
   m_browser->ExecuteJavaScript(script);
 
-  // 等待新内容加载，然后重新扫描
   int delay = 2500 + QRandomGenerator::global()->bounded(2000);
   QTimer::singleShot(delay, this, [this]() {
     if (!m_busy)

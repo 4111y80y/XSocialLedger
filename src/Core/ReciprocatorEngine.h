@@ -24,7 +24,10 @@ public:
   void stop();
 
   bool isBusy() const { return m_busy; }
-  void setBatchInterval(int seconds) { m_batchInterval = seconds; }
+  void setBatchInterval(int minSec, int maxSec) {
+    m_batchMinInterval = minSec;
+    m_batchMaxInterval = maxSec;
+  }
 
 signals:
   void reciprocateStarted(const QString &userHandle);
@@ -33,6 +36,7 @@ signals:
   void statusMessage(const QString &message);
   void batchProgress(int done, int total);
   void batchFinished();
+  void batchCountdownTick(int secondsRemaining);
 
 private slots:
   void onPageLoaded(bool success);
@@ -69,7 +73,8 @@ private:
   QList<QPair<QString, QString>> m_batchQueue;
   int m_batchDone;
   int m_batchTotal;
-  int m_batchInterval; // seconds
+  int m_batchMinInterval; // seconds
+  int m_batchMaxInterval; // seconds
   QTimer *m_batchTimer;
   QTimer *m_batchCountdownTimer;
   int m_batchCountdownRemaining;

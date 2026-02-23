@@ -6,7 +6,6 @@
 #include <QPushButton>
 #include <QSplitter>
 
-
 class WebView2Widget;
 class ActionListPanel;
 class DataStorage;
@@ -34,6 +33,8 @@ private:
   void setupUI();
   void setupToolBar();
   void setupConnections();
+  void saveLayout();
+  void restoreLayout();
 
   // UI 组件
   QSplitter *m_splitter;

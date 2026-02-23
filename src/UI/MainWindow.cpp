@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMessageBox>
+#include <QSettings>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -24,6 +25,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   setupUI();
   setupToolBar();
   setupConnections();
+
+  // 恢复窗口布局
+  restoreLayout();
 
   // 创建浏览器并导航到通知页面
   m_browser->CreateBrowser("https://x.com/notifications");
@@ -219,6 +223,9 @@ void MainWindow::onCollectingStateChanged(bool collecting) {
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
+  // 保存窗口布局
+  saveLayout();
+
   if (m_collector && m_collector->isCollecting()) {
     m_collector->stopCollecting();
   }
@@ -229,4 +236,26 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
   m_browser->CloseBrowser();
   event->accept();
+}
+
+void MainWindow::saveLayout() {
+  QSettings settings("XSocialLedger", "XSocialLedger");
+  settings.setValue("geometry", saveGeometry());
+  settings.setValue("windowState", saveState());
+  settings.setValue("splitterSizes", m_splitter->saveState());
+  qDebug() << "[MainWindow] Layout saved";
+}
+
+void MainWindow::restoreLayout() {
+  QSettings settings("XSocialLedger", "XSocialLedger");
+  if (settings.contains("geometry")) {
+    restoreGeometry(settings.value("geometry").toByteArray());
+  }
+  if (settings.contains("windowState")) {
+    restoreState(settings.value("windowState").toByteArray());
+  }
+  if (settings.contains("splitterSizes")) {
+    m_splitter->restoreState(settings.value("splitterSizes").toByteArray());
+  }
+  qDebug() << "[MainWindow] Layout restored";
 }

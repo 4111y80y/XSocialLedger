@@ -3,6 +3,7 @@
 #include "Core/NotificationCollector.h"
 #include "Core/ReciprocatorEngine.h"
 #include "Data/DataStorage.h"
+#include "Data/SocialAction.h"
 #include "WebView2Widget.h"
 #include <QApplication>
 #include <QCloseEvent>
@@ -89,7 +90,12 @@ void MainWindow::setupUI() {
   m_reciprocator = new ReciprocatorEngine(m_recipBrowser, m_storage, this);
 
   // 状态栏
-  m_statusLabel = new QLabel("就绪", this);
+  m_statusLabel =
+      new QLabel(QString::fromUtf8("\xe5\xb0\xb1\xe7\xbb\xaa"), this);
+  m_statusLabel->setStyleSheet(
+      "QLabel { color: #e0e0e0; font-size: 13px; padding: 2px 8px; }");
+  statusBar()->setStyleSheet("QStatusBar { background: #0f0f23; color: "
+                             "#e0e0e0; border-top: 1px solid #2a2a4a; }");
   statusBar()->addPermanentWidget(m_statusLabel);
 }
 
@@ -261,20 +267,16 @@ void MainWindow::setupConnections() {
       return;
     }
     auto likes = m_storage->loadLikes();
-    QDate today = QDate::currentDate();
     QList<QPair<QString, QString>> pending;
     for (const auto &a : likes) {
-      if (a.reciprocated)
-        continue;
-      QDateTime dt = QDateTime::fromString(a.timestamp, Qt::ISODate);
-      if (dt.isValid() && dt.toLocalTime().date() == today) {
+      if (!a.reciprocated) {
         pending.prepend({a.userHandle, a.id});
       }
     }
     if (pending.isEmpty()) {
       onStatusMessage(QString::fromUtf8(
-          "\xe4\xbb\x8a\xe5\xa4\xa9\xe6\xb2\xa1\xe6\x9c\x89\xe5\xbe\x85\xe5\x9b"
-          "\x9e\xe9\xa6\x88\xe7\x9a\x84\xe7\x82\xb9\xe8\xb5\x9e"));
+          "\xe6\xb2\xa1\xe6\x9c\x89\xe5\xbe\x85\xe5\x9b\x9e\xe9\xa6\x88"
+          "\xe7\x9a\x84\xe7\x82\xb9\xe8\xb5\x9e"));
       return;
     }
     m_reciprocator->setBatchInterval(m_batchIntervalSpin->value());
@@ -287,6 +289,12 @@ void MainWindow::setupConnections() {
         "#d32f2f; border-radius: 6px; padding: 6px 16px; font-size: 13px; "
         "min-width: 80px; }"
         "QPushButton:hover { background: #d32f2f; }");
+    onStatusMessage(
+        QString::fromUtf8(
+            "\xf0\x9f\x9a\x80 \xe6\x89\xb9\xe9\x87\x8f\xe5\x9b\x9e\xe9\xa6\x88"
+            "\xe5\xbc\x80\xe5\xa7\x8b: %1 \xe4\xb8\xaa\xe5\xbe\x85\xe5\xa4\x84"
+            "\xe7\x90\x86")
+            .arg(pending.size()));
   });
 
   // Spinbox value changes -> save settings

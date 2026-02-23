@@ -1,4 +1,4 @@
-#include "NotificationCollector.h"
+﻿#include "NotificationCollector.h"
 #include "Data/DataStorage.h"
 #include "Data/SocialAction.h"
 #include "UI/WebView2Widget.h"
@@ -386,13 +386,8 @@ void NotificationCollector::triggerScroll() {
 
   // Check page limit
   if (m_maxPages > 0 && m_scrollCount >= m_maxPages) {
-    emit statusMessage(
-        QString::fromUtf8(
-            "\xe2\x9c\x85 \xe5\xb7\xb2\xe9\x87\x87\xe9\x9b\x86 %1 "
-            "\xe9\xa1\xb5\xef\xbc\x8c\xe5\x81\x9c\xe6\xad\xa2\xe9\x87\x87\xe9"
-            "\x9b\x86")
-            .arg(m_scrollCount));
-    stopCollecting();
+    m_pollTimer->stop();
+    m_scriptInjected = false;
     // Start auto-refresh timer if enabled
     if (m_autoRefreshInterval > 0) {
       m_autoRefreshTimer->start(m_autoRefreshInterval * 1000);
@@ -403,6 +398,14 @@ void NotificationCollector::triggerScroll() {
                             "\xe8\x87\xaa\xe5\x8a\xa8\xe5\x88\xb7\xe6\x96\xb0"
                             "\xe5\x80\x92\xe8\xae\xa1\xe6\x97\xb6: %1s")
               .arg(m_countdownRemaining));
+    } else {
+      m_collecting = false;
+      emit collectingStateChanged(false);
+      emit statusMessage(
+          QString::fromUtf8(
+              "\xe2\x9c\x85 \xe5\xb7\xb2\xe9\x87\x87\xe9\x9b\x86 %1 "
+              "\xe9\xa1\xb5")
+              .arg(m_scrollCount));
     }
     return;
   }

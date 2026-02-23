@@ -10,6 +10,7 @@
 #include <QMenu>
 #include <QUrl>
 #include <QVBoxLayout>
+#include <algorithm>
 
 
 ActionListPanel::ActionListPanel(DataStorage *storage, QWidget *parent)
@@ -117,6 +118,12 @@ void ActionListPanel::populateTable(QTableWidget *table, const QString &type) {
   } else {
     actions = m_storage->loadReplies();
   }
+
+  // 按时间降序排列（最新的在最前面）
+  std::sort(actions.begin(), actions.end(),
+            [](const SocialAction &a, const SocialAction &b) {
+              return a.timestamp > b.timestamp;
+            });
 
   table->setRowCount(actions.size());
 

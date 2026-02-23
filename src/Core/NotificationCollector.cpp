@@ -94,28 +94,90 @@ void NotificationCollector::injectCollectorScript() {
 
     const seen = new Set();
 
-    // 自动检测当前登录用户的 handle（排除自己）
+    // 自动检测当前登录用户的 handle（排除自己）— 多种方式兜底
     let myHandle = '';
-    const profileLink = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
-    if (profileLink) {
-        const href = profileLink.getAttribute('href') || '';
-        myHandle = href.replace('/', '').toLowerCase();
-    }
-    if (!myHandle) {
-        // 备用方案：从 URL 或页面中查找
-        const navLinks = document.querySelectorAll('nav a[role="link"]');
-        for (const link of navLinks) {
-            const href = link.getAttribute('href') || '';
-            if (href.match(/^\/[a-zA-Z0-9_]+$/) && !href.startsWith('/i/') && 
-                !href.startsWith('/home') && !href.startsWith('/explore') && 
-                !href.startsWith('/search') && !href.startsWith('/notifications') &&
-                !href.startsWith('/messages')) {
+
+    function detectMyHandle() {
+        if (myHandle) return myHandle;
+
+        // 方法1: data-testid
+        const profileLink = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
+        if (profileLink) {
+            const href = profileLink.getAttribute('href') || '';
+            if (href.match(/^\/[a-zA-Z0-9_]+$/)) {
                 myHandle = href.replace('/', '').toLowerCase();
-                break;
+                console.log('[SELF_HANDLE]' + myHandle);
+                return myHandle;
             }
         }
+
+        // 方法2: nav 里的个人主页链接
+        const navLinks = document.querySelectorAll('nav a[role="link"]');
+        const sysRoutes = ['/i/', '/home', '/explore', '/search', '/notifications', '/messages', '/settings', '/compose', '/premium'];
+        for (const link of navLinks) {
+            const href = link.getAttribute('href') || '';
+            if (href.match(/^\/[a-zA-Z0-9_]+$/) && !sysRoutes.some(r => href.startsWith(r))) {
+                myHandle = href.replace('/', '').toLowerCase();
+                console.log('[SELF_HANDLE]' + myHandle);
+                return myHandle;
+            }
+        }
+
+        // 方法3: 从 "Replying to @XXX" 文本提取（最可靠！因为通知页必有此文本）
+        const allLinks = document.querySelectorAll('a[role="link"]');
+        for (const link of allLinks) {
+            const href = link.getAttribute('href') || '';
+            if (!href.match(/^\/[a-zA-Z0-9_]+$/)) continue;
+            // 检查此链接前面是否有 "Replying to" 文本
+            const parent = link.closest('div');
+            if (parent && parent.textContent && parent.textContent.includes('Replying to')) {
+                // 这个通知页的 "Replying to @XXX" 中的 XXX 就是自己
+                const handle = href.replace('/', '').toLowerCase();
+                // 统计此 handle 出现在 "Replying to" 中的次数
+                const replyingTexts = document.querySelectorAll('div[dir="ltr"]');
+                let count = 0;
+                for (const rt of replyingTexts) {
+                    if (rt.textContent && rt.textContent.includes('Replying to') && rt.textContent.includes('@' + handle)) {
+                        count++;
+                    }
+                }
+                // 如果多次出现在 "Replying to" 中，很可能是自己
+                if (count >= 2) {
+                    myHandle = handle;
+                    console.log('[SELF_HANDLE]' + myHandle);
+                    return myHandle;
+                }
+            }
+        }
+
+        // 方法4: 从 cookie 中提取 screen_name (twid)
+        try {
+            const cookies = document.cookie;
+            const twidMatch = cookies.match(/twid=u%3D(\d+)/);
+            if (twidMatch) {
+                // 有 twid 但无法直接获取 screen_name
+                // 尝试从页面 __NEXT_DATA__ 或 meta 标签获取
+                const metaTag = document.querySelector('meta[property="al:android:url"]');
+                if (metaTag) {
+                    const content = metaTag.getAttribute('content') || '';
+                    const match = content.match(/screen_name=([^&]+)/);
+                    if (match) {
+                        myHandle = match[1].toLowerCase();
+                        console.log('[SELF_HANDLE]' + myHandle);
+                        return myHandle;
+                    }
+                }
+            }
+        } catch(e) {}
+
+        return myHandle;
     }
-    console.log('[SELF_HANDLE]' + myHandle);
+
+    // 初始检测
+    detectMyHandle();
+    // 延迟再次检测（DOM 可能未完全加载）
+    setTimeout(detectMyHandle, 3000);
+    setTimeout(detectMyHandle, 8000);
 
     function collectNotifications() {
         const articles = document.querySelectorAll('article[role="article"]');

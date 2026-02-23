@@ -8,7 +8,6 @@
 #include <windows.h>
 #include <wrl.h>
 
-
 // WebView2 event handler - converts WebView2 events to Qt signals
 class WebView2Handler : public QObject {
   Q_OBJECT
@@ -47,6 +46,7 @@ signals:
   void likeFound(const QString &jsonData);
   void replyFound(const QString &jsonData);
   void collectProgress(const QString &jsonData);
+  void selfHandleDetected(const QString &handle);
 
 private:
   void setupEventHandlers();

@@ -27,11 +27,13 @@ signals:
   void newReplyCollected(const QString &userName, const QString &timestamp);
   void collectingStateChanged(bool collecting);
   void statusMessage(const QString &message);
+  void selfRecordsCleaned(int removedCount);
 
 private slots:
   void onPageLoaded(bool success);
   void onLikeFound(const QString &jsonData);
   void onReplyFound(const QString &jsonData);
+  void onCollectProgress(const QString &jsonData);
   void onPollTimer();
 
 private:

@@ -24,6 +24,20 @@ NotificationCollector::NotificationCollector(WebView2Widget *browser,
           &NotificationCollector::onLikeFound);
   connect(m_browser, &WebView2Widget::replyFound, this,
           &NotificationCollector::onReplyFound);
+  connect(m_browser, &WebView2Widget::collectProgress, this,
+          &NotificationCollector::onCollectProgress);
+  connect(
+      m_browser, &WebView2Widget::selfHandleDetected, this,
+      [this](const QString &handle) {
+        int removed = m_storage->removeByHandle(handle);
+        if (removed > 0) {
+          qDebug() << "[Collector] Cleaned" << removed << "self records for @"
+                   << handle;
+          emit selfRecordsCleaned(removed);
+          emit statusMessage(
+              QString("已清理 %1 条自己的记录 (@%2)").arg(removed).arg(handle));
+        }
+      });
 }
 
 NotificationCollector::~NotificationCollector() { stopCollecting(); }
@@ -102,7 +116,7 @@ void NotificationCollector::injectCollectorScript() {
             }
         }
     }
-    console.log('[DEBUG] Detected my handle: @' + myHandle);
+    console.log('[SELF_HANDLE]' + myHandle);
 
     function collectNotifications() {
         const articles = document.querySelectorAll('article[role="article"]');
@@ -258,6 +272,17 @@ void NotificationCollector::onReplyFound(const QString &jsonData) {
                                                      : action.userName,
                            action.timestamp);
   }
+}
+
+void NotificationCollector::onCollectProgress(const QString &jsonData) {
+  QJsonDocument doc = QJsonDocument::fromJson(jsonData.toUtf8());
+  if (!doc.isObject())
+    return;
+  QJsonObject obj = doc.object();
+  int found = obj["found"].toInt();
+  int total = obj["total"].toInt();
+  emit statusMessage(
+      QString("采集中... 本次新增 %1 条，累计 %2 条").arg(found).arg(total));
 }
 
 void NotificationCollector::onPollTimer() {

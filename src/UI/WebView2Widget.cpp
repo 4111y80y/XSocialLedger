@@ -7,7 +7,6 @@
 #include <QTimer>
 #include <windows.h>
 
-
 WebView2Widget::WebView2Widget(QWidget *parent)
     : QWidget(parent), m_handler(nullptr), m_browserCreated(false),
       m_browserCreating(false) {
@@ -37,6 +36,8 @@ WebView2Widget::WebView2Widget(QWidget *parent)
           &WebView2Widget::replyFound);
   connect(m_handler, &WebView2Handler::collectProgress, this,
           &WebView2Widget::collectProgress);
+  connect(m_handler, &WebView2Handler::selfHandleDetected, this,
+          &WebView2Widget::selfHandleDetected);
 }
 
 WebView2Widget::~WebView2Widget() { CloseBrowser(); }

@@ -8,7 +8,6 @@
 #include <windows.h>
 #include <wrl.h>
 
-
 class WebView2Handler;
 
 // Qt wrapper for WebView2
@@ -56,6 +55,7 @@ signals:
   void likeFound(const QString &jsonData);
   void replyFound(const QString &jsonData);
   void collectProgress(const QString &jsonData);
+  void selfHandleDetected(const QString &handle);
 
 protected:
   void resizeEvent(QResizeEvent *event) override;

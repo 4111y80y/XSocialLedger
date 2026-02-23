@@ -2,7 +2,6 @@
 #include <QDateTime>
 #include <QDebug>
 
-
 WebView2Handler::WebView2Handler(QObject *parent) : QObject(parent) {}
 
 WebView2Handler::~WebView2Handler() { detach(); }
@@ -244,6 +243,15 @@ void WebView2Handler::processConsoleMessage(const QString &msg) {
   if (msg.startsWith("[COLLECT_PROGRESS]")) {
     QString jsonData = msg.mid(18);
     emit collectProgress(jsonData);
+    return;
+  }
+
+  if (msg.startsWith("[SELF_HANDLE]")) {
+    QString handle = msg.mid(13).trimmed();
+    if (!handle.isEmpty()) {
+      qDebug() << "[WebView2Handler] Self handle detected:" << handle;
+      emit selfHandleDetected(handle);
+    }
     return;
   }
 

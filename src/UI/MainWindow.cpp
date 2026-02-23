@@ -16,7 +16,6 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 
-
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
   // 初始化数据存储
@@ -149,6 +148,8 @@ void MainWindow::setupConnections() {
           &ActionListPanel::onNewLike);
   connect(m_collector, &NotificationCollector::newReplyCollected, m_actionPanel,
           &ActionListPanel::onNewReply);
+  connect(m_collector, &NotificationCollector::selfRecordsCleaned,
+          m_actionPanel, [this](int) { m_actionPanel->refreshAll(); });
 }
 
 void MainWindow::onStartCollecting() { m_collector->startCollecting(); }

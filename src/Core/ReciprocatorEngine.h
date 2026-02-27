@@ -23,7 +23,7 @@ public:
   void stopBatch();
   void stop();
 
-  bool isBusy() const { return m_busy; }
+  bool isBusy() const { return m_busy || m_batchMode; }
   void setBatchInterval(int minSec, int maxSec) {
     m_batchMinInterval = minSec;
     m_batchMaxInterval = maxSec;

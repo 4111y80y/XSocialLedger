@@ -327,8 +327,23 @@ void ReciprocatorEngine::injectClickMoreScript() {
   if (!m_browsing || m_state == Resting)
     return;
 
-  // 参考 SpotlightX 的 "Show N posts" 自动点击逻辑
-  QString script = R"JS(
+  // X.com 使用虚拟滚动，滚到下方后顶部的 "Show N posts" 按钮会从 DOM 中移除
+  // 所以先滚回顶部，等 DOM 重新渲染，再检测并点击
+  QString scrollTopScript = R"JS(
+(function() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+})();
+)JS";
+
+  m_browser->ExecuteJavaScript(scrollTopScript);
+
+  // 等待滚动到顶部+DOM渲染完成后再查找并点击More按钮
+  QTimer::singleShot(1500, this, [this]() {
+    if (!m_browsing || m_state == Resting)
+      return;
+
+    // 参考 SpotlightX 的 "Show N posts" 自动点击逻辑
+    QString script = R"JS(
 (function() {
     try {
         const cells = document.querySelectorAll('[data-testid="cellInnerDiv"]');
@@ -350,7 +365,8 @@ void ReciprocatorEngine::injectClickMoreScript() {
 })();
 )JS";
 
-  m_browser->ExecuteJavaScript(script);
+    m_browser->ExecuteJavaScript(script);
+  });
 }
 
 void ReciprocatorEngine::onWebMessage(const QString &message) {

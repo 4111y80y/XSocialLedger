@@ -38,6 +38,8 @@ WebView2Widget::WebView2Widget(QWidget *parent)
           &WebView2Widget::collectProgress);
   connect(m_handler, &WebView2Handler::selfHandleDetected, this,
           &WebView2Widget::selfHandleDetected);
+  connect(m_handler, &WebView2Handler::webMessageReceived, this,
+          &WebView2Widget::webMessageReceived);
 }
 
 WebView2Widget::~WebView2Widget() { CloseBrowser(); }

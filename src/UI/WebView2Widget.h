@@ -56,6 +56,7 @@ signals:
   void replyFound(const QString &jsonData);
   void collectProgress(const QString &jsonData);
   void selfHandleDetected(const QString &handle);
+  void webMessageReceived(const QString &message);
 
 protected:
   void resizeEvent(QResizeEvent *event) override;

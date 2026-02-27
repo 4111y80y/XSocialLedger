@@ -56,14 +56,22 @@ private:
   QSpinBox *m_pagesSpin;
   QSpinBox *m_refreshMinSpin;
   QSpinBox *m_refreshMaxSpin;
-  QSpinBox *m_batchMinSpin;
-  QSpinBox *m_batchMaxSpin;
+
+  // 自动回馈配置控件
+  QSpinBox *m_scrollMinSpin;   // 滚动间隔最小(秒)
+  QSpinBox *m_scrollMaxSpin;   // 滚动间隔最大(秒)
+  QSpinBox *m_likeWaitMinSpin; // 点赞等待最小(秒)
+  QSpinBox *m_likeWaitMaxSpin; // 点赞等待最大(秒)
+  QSpinBox *m_browseMinSpin;   // 浏览时长最小(分钟)
+  QSpinBox *m_browseMaxSpin;   // 浏览时长最大(分钟)
+  QSpinBox *m_restMinSpin;     // 休息时长最小(分钟)
+  QSpinBox *m_restMaxSpin;     // 休息时长最大(分钟)
 
   // Status bar
   QLabel *m_statusLabel;
   QLabel *m_countdownLabel;
   int m_refreshCountdown;
-  int m_batchCountdown;
+  int m_sessionCountdown;
 
   // Data and logic
   DataStorage *m_storage;

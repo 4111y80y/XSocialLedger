@@ -227,6 +227,12 @@ void WebView2Handler::executeJavaScript(const QString &code) {
 }
 
 void WebView2Handler::processConsoleMessage(const QString &msg) {
+  // Forward JSON messages (from window.chrome.webview.postMessage)
+  if (msg.startsWith("{")) {
+    emit webMessageReceived(msg);
+    return;
+  }
+
   // XSocialLedger message protocol
   if (msg.startsWith("[LIKE_FOUND]")) {
     QString jsonData = msg.mid(12);

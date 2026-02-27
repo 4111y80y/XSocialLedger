@@ -69,7 +69,7 @@ void MainWindow::setupUI() {
   m_actionPanel = new ActionListPanel(m_storage, m_splitter);
   m_actionPanel->setMinimumWidth(300);
 
-  // 右侧 - 回馋浏览器
+  // 右侧 - 回馈浏览器
   m_recipBrowser = new WebView2Widget(m_splitter);
   m_recipBrowser->setMinimumWidth(400);
 
@@ -78,14 +78,14 @@ void MainWindow::setupUI() {
   m_splitter->addWidget(m_recipBrowser);
   m_splitter->setStretchFactor(0, 4); // 浏览器 40%
   m_splitter->setStretchFactor(1, 3); // 面板 30%
-  m_splitter->setStretchFactor(2, 3); // 回馋浏览器 30%
+  m_splitter->setStretchFactor(2, 3); // 回馈浏览器 30%
 
   setCentralWidget(m_splitter);
 
   // 创建采集器
   m_collector = new NotificationCollector(m_browser, m_storage, this);
 
-  // 创建回馋引擎
+  // 创建回馈引擎
   m_recipBrowser->CreateBrowser("https://x.com");
   m_reciprocator = new ReciprocatorEngine(m_recipBrowser, m_storage, this);
 
@@ -98,7 +98,7 @@ void MainWindow::setupUI() {
   m_countdownLabel->setStyleSheet(
       "QLabel { color: #ffcc00; font-size: 13px; padding: 2px 8px; }");
   m_refreshCountdown = 0;
-  m_batchCountdown = 0;
+  m_sessionCountdown = 0;
   statusBar()->setStyleSheet("QStatusBar { background: #0f0f23; color: "
                              "#e0e0e0; border-top: 1px solid #2a2a4a; }");
   statusBar()->addPermanentWidget(m_countdownLabel);
@@ -118,6 +118,10 @@ void MainWindow::setupToolBar() {
                      "QPushButton:pressed { background: #163050; }"
                      "QPushButton:disabled { background: #1a1a2e; color: "
                      "#555566; border-color: #2a2a3a; }";
+
+  QString spinStyle =
+      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
+      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }";
 
   m_startBtn = new QPushButton("▶ 开始采集", this);
   m_startBtn->setStyleSheet("QPushButton { background: #1b5e20; color: "
@@ -162,9 +166,7 @@ void MainWindow::setupToolBar() {
   m_pagesSpin = new QSpinBox(this);
   m_pagesSpin->setRange(1, 50);
   m_pagesSpin->setValue(5);
-  m_pagesSpin->setStyleSheet(
-      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
-      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
+  m_pagesSpin->setStyleSheet(spinStyle);
   toolbar->addWidget(m_pagesSpin);
 
   // Refresh interval range
@@ -176,9 +178,7 @@ void MainWindow::setupToolBar() {
   m_refreshMinSpin->setRange(10, 600);
   m_refreshMinSpin->setValue(60);
   m_refreshMinSpin->setSuffix("s");
-  m_refreshMinSpin->setStyleSheet(
-      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
-      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
+  m_refreshMinSpin->setStyleSheet(spinStyle);
   toolbar->addWidget(m_refreshMinSpin);
   QLabel *refreshDash = new QLabel("-", this);
   refreshDash->setStyleSheet("color: #a0a0c0;");
@@ -187,42 +187,15 @@ void MainWindow::setupToolBar() {
   m_refreshMaxSpin->setRange(10, 600);
   m_refreshMaxSpin->setValue(120);
   m_refreshMaxSpin->setSuffix("s");
-  m_refreshMaxSpin->setStyleSheet(
-      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
-      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
+  m_refreshMaxSpin->setStyleSheet(spinStyle);
   toolbar->addWidget(m_refreshMaxSpin);
 
   toolbar->addSeparator();
 
-  // Batch interval range
-  QLabel *batchLabel =
-      new QLabel(QString::fromUtf8("\xe5\x9b\x9e\xe9\xa6\x88:"), this);
-  batchLabel->setStyleSheet("color: #a0a0c0;");
-  toolbar->addWidget(batchLabel);
-  m_batchMinSpin = new QSpinBox(this);
-  m_batchMinSpin->setRange(30, 600);
-  m_batchMinSpin->setValue(120);
-  m_batchMinSpin->setSuffix("s");
-  m_batchMinSpin->setStyleSheet(
-      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
-      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
-  toolbar->addWidget(m_batchMinSpin);
-  QLabel *batchDash = new QLabel("-", this);
-  batchDash->setStyleSheet("color: #a0a0c0;");
-  toolbar->addWidget(batchDash);
-  m_batchMaxSpin = new QSpinBox(this);
-  m_batchMaxSpin->setRange(30, 600);
-  m_batchMaxSpin->setValue(180);
-  m_batchMaxSpin->setSuffix("s");
-  m_batchMaxSpin->setStyleSheet(
-      "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
-      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }");
-  toolbar->addWidget(m_batchMaxSpin);
-
-  // Batch button
+  // === 自动回馈按钮 ===
   m_batchBtn = new QPushButton(
       QString::fromUtf8(
-          "\xf0\x9f\x9a\x80 \xe6\x89\xb9\xe9\x87\x8f\xe5\x9b\x9e\xe9\xa6\x88"),
+          "\xf0\x9f\x9a\x80 \xe8\x87\xaa\xe5\x8a\xa8\xe5\x9b\x9e\xe9\xa6\x88"),
       this);
   m_batchBtn->setStyleSheet(
       "QPushButton { background: #e65100; color: #e0e0e0; border: 1px solid "
@@ -233,6 +206,81 @@ void MainWindow::setupToolBar() {
       "QPushButton:disabled { background: #1a1a2e; color: #555566; "
       "border-color: #2a2a3a; }");
   toolbar->addWidget(m_batchBtn);
+
+  toolbar->addSeparator();
+
+  // === 回馈配置控件 ===
+  // 滚动间隔
+  QLabel *scrollLabel = new QLabel(QString::fromUtf8("滚动:"), this);
+  scrollLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
+  toolbar->addWidget(scrollLabel);
+  m_scrollMinSpin = new QSpinBox(this);
+  m_scrollMinSpin->setRange(2, 60);
+  m_scrollMinSpin->setValue(5);
+  m_scrollMinSpin->setSuffix("s");
+  m_scrollMinSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_scrollMinSpin);
+  toolbar->addWidget(new QLabel("-", this));
+  m_scrollMaxSpin = new QSpinBox(this);
+  m_scrollMaxSpin->setRange(2, 120);
+  m_scrollMaxSpin->setValue(15);
+  m_scrollMaxSpin->setSuffix("s");
+  m_scrollMaxSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_scrollMaxSpin);
+
+  // 点赞等待
+  QLabel *likeLabel = new QLabel(QString::fromUtf8("点赞:"), this);
+  likeLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
+  toolbar->addWidget(likeLabel);
+  m_likeWaitMinSpin = new QSpinBox(this);
+  m_likeWaitMinSpin->setRange(10, 600);
+  m_likeWaitMinSpin->setValue(60);
+  m_likeWaitMinSpin->setSuffix("s");
+  m_likeWaitMinSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_likeWaitMinSpin);
+  toolbar->addWidget(new QLabel("-", this));
+  m_likeWaitMaxSpin = new QSpinBox(this);
+  m_likeWaitMaxSpin->setRange(10, 600);
+  m_likeWaitMaxSpin->setValue(180);
+  m_likeWaitMaxSpin->setSuffix("s");
+  m_likeWaitMaxSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_likeWaitMaxSpin);
+
+  // 浏览时长
+  QLabel *browseLabel = new QLabel(QString::fromUtf8("浏览:"), this);
+  browseLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
+  toolbar->addWidget(browseLabel);
+  m_browseMinSpin = new QSpinBox(this);
+  m_browseMinSpin->setRange(1, 120);
+  m_browseMinSpin->setValue(20);
+  m_browseMinSpin->setSuffix("m");
+  m_browseMinSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_browseMinSpin);
+  toolbar->addWidget(new QLabel("-", this));
+  m_browseMaxSpin = new QSpinBox(this);
+  m_browseMaxSpin->setRange(1, 120);
+  m_browseMaxSpin->setValue(20);
+  m_browseMaxSpin->setSuffix("m");
+  m_browseMaxSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_browseMaxSpin);
+
+  // 休息时长
+  QLabel *restLabel = new QLabel(QString::fromUtf8("休息:"), this);
+  restLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
+  toolbar->addWidget(restLabel);
+  m_restMinSpin = new QSpinBox(this);
+  m_restMinSpin->setRange(1, 120);
+  m_restMinSpin->setValue(20);
+  m_restMinSpin->setSuffix("m");
+  m_restMinSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_restMinSpin);
+  toolbar->addWidget(new QLabel("-", this));
+  m_restMaxSpin = new QSpinBox(this);
+  m_restMaxSpin->setRange(1, 120);
+  m_restMaxSpin->setValue(20);
+  m_restMaxSpin->setSuffix("m");
+  m_restMaxSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_restMaxSpin);
 
   // Spacer
   QWidget *spacer = new QWidget(this);
@@ -266,7 +314,7 @@ void MainWindow::setupConnections() {
   // 回馈引擎信号
   connect(m_reciprocator, &ReciprocatorEngine::statusMessage, this,
           &MainWindow::onStatusMessage);
-  connect(m_reciprocator, &ReciprocatorEngine::reciprocateSuccess, this,
+  connect(m_reciprocator, &ReciprocatorEngine::likedUser, this,
           [this](const QString &, const QString &) {
             m_actionPanel->refreshAll();
           });
@@ -275,43 +323,49 @@ void MainWindow::setupConnections() {
   connect(m_actionPanel, &ActionListPanel::reciprocateLikeRequested, this,
           &MainWindow::onReciprocateLike);
 
-  // Batch signals
-  connect(m_reciprocator, &ReciprocatorEngine::batchProgress, this,
-          [this](int done, int total) {
-            onStatusMessage(QString("Batch: %1/%2").arg(done).arg(total));
+  // 浏览状态变化
+  connect(m_reciprocator, &ReciprocatorEngine::browsingStateChanged, this,
+          [this](const QString &state) {
+            if (state == "idle") {
+              m_batchBtn->setText(QString::fromUtf8(
+                  "\xf0\x9f\x9a\x80 "
+                  "\xe8\x87\xaa\xe5\x8a\xa8\xe5\x9b\x9e\xe9\xa6\x88"));
+              m_batchBtn->setStyleSheet(
+                  "QPushButton { background: #e65100; color: #e0e0e0; border: "
+                  "1px solid #ff6d00; border-radius: 6px; padding: 6px 16px; "
+                  "font-size: 13px; min-width: 80px; }"
+                  "QPushButton:hover { background: #ff6d00; }");
+              m_sessionCountdown = 0;
+              updateCountdownLabel();
+            }
           });
-  connect(m_reciprocator, &ReciprocatorEngine::batchFinished, this, [this]() {
-    m_actionPanel->refreshAll();
-    m_batchBtn->setText(QString::fromUtf8(
-        "\xf0\x9f\x9a\x80 \xe6\x89\xb9\xe9\x87\x8f\xe5\x9b\x9e\xe9\xa6\x88"));
-    m_batchBtn->setStyleSheet(
-        "QPushButton { background: #e65100; color: #e0e0e0; border: 1px solid "
-        "#ff6d00; border-radius: 6px; padding: 6px 16px; font-size: 13px; "
-        "min-width: 80px; }"
-        "QPushButton:hover { background: #ff6d00; }");
-  });
 
-  // Countdown signals -> combined label
+  // 会话倒计时
+  connect(m_reciprocator, &ReciprocatorEngine::sessionCountdown, this,
+          [this](int sec) {
+            m_sessionCountdown = sec;
+            updateCountdownLabel();
+          });
+
+  // Countdown signals -> combined label (refresh)
   connect(m_collector, &NotificationCollector::refreshCountdown, this,
           [this](int sec) {
             m_refreshCountdown = sec;
             updateCountdownLabel();
           });
-  connect(m_reciprocator, &ReciprocatorEngine::batchCountdownTick, this,
-          [this](int sec) {
-            m_batchCountdown = sec;
-            updateCountdownLabel();
-          });
 
   // Batch button - toggle start/stop
   connect(m_batchBtn, &QPushButton::clicked, this, [this]() {
-    // If batch is running, stop it
+    // If browsing is running, stop it
     if (m_reciprocator->isBusy()) {
-      m_reciprocator->stopBatch();
-      m_batchCountdown = 0;
+      m_reciprocator->stopBrowsing();
+      m_sessionCountdown = 0;
       updateCountdownLabel();
+      onStatusMessage(QString::fromUtf8("⏹ 已停止自动回馈"));
       return;
     }
+
+    // Collect pending reciprocations
     auto likes = m_storage->loadLikes();
     QList<QPair<QString, QString>> pending;
     for (const auto &a : likes) {
@@ -325,9 +379,18 @@ void MainWindow::setupConnections() {
           "\xe7\x9a\x84\xe7\x82\xb9\xe8\xb5\x9e"));
       return;
     }
-    m_reciprocator->setBatchInterval(m_batchMinSpin->value(),
-                                     m_batchMaxSpin->value());
-    m_reciprocator->startBatchReciprocate(pending);
+
+    // Apply current settings
+    m_reciprocator->setScrollInterval(m_scrollMinSpin->value(),
+                                      m_scrollMaxSpin->value());
+    m_reciprocator->setLikeWaitInterval(m_likeWaitMinSpin->value(),
+                                        m_likeWaitMaxSpin->value());
+    m_reciprocator->setBrowseRestCycle(
+        m_browseMinSpin->value(), m_browseMaxSpin->value(),
+        m_restMinSpin->value(), m_restMaxSpin->value());
+
+    m_reciprocator->startBrowsing(pending);
+
     // Toggle button to stop mode
     m_batchBtn->setText(QString::fromUtf8(
         "\xe2\x8f\xb9 \xe5\x81\x9c\xe6\xad\xa2\xe5\x9b\x9e\xe9\xa6\x88"));
@@ -338,9 +401,9 @@ void MainWindow::setupConnections() {
         "QPushButton:hover { background: #d32f2f; }");
     onStatusMessage(
         QString::fromUtf8(
-            "\xf0\x9f\x9a\x80 \xe6\x89\xb9\xe9\x87\x8f\xe5\x9b\x9e\xe9\xa6\x88"
-            "\xe5\xbc\x80\xe5\xa7\x8b: %1 \xe4\xb8\xaa\xe5\xbe\x85\xe5\xa4\x84"
-            "\xe7\x90\x86")
+            "\xf0\x9f\x9a\x80 "
+            "\xe8\x87\xaa\xe5\x8a\xa8\xe5\x9b\x9e\xe9\xa6\x88\xe5\xbc\x80"
+            "\xe5\xa7\x8b: %1 \xe4\xb8\xaa\xe5\xbe\x85\xe5\xa4\x84\xe7\x90\x86")
             .arg(pending.size()));
   });
 
@@ -359,15 +422,34 @@ void MainWindow::setupConnections() {
           updateRefreshRange);
   connect(m_refreshMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
           updateRefreshRange);
-  auto updateBatchRange = [this]() {
-    m_reciprocator->setBatchInterval(m_batchMinSpin->value(),
-                                     m_batchMaxSpin->value());
+
+  // 回馈配置 SpinBox 变化 -> 实时生效 + 保存
+  auto updateRecipConfig = [this]() {
+    m_reciprocator->setScrollInterval(m_scrollMinSpin->value(),
+                                      m_scrollMaxSpin->value());
+    m_reciprocator->setLikeWaitInterval(m_likeWaitMinSpin->value(),
+                                        m_likeWaitMaxSpin->value());
+    m_reciprocator->setBrowseRestCycle(
+        m_browseMinSpin->value(), m_browseMaxSpin->value(),
+        m_restMinSpin->value(), m_restMaxSpin->value());
     saveSettings();
   };
-  connect(m_batchMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
-          updateBatchRange);
-  connect(m_batchMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
-          updateBatchRange);
+  connect(m_scrollMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateRecipConfig);
+  connect(m_scrollMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateRecipConfig);
+  connect(m_likeWaitMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateRecipConfig);
+  connect(m_likeWaitMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateRecipConfig);
+  connect(m_browseMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateRecipConfig);
+  connect(m_browseMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateRecipConfig);
+  connect(m_restMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateRecipConfig);
+  connect(m_restMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateRecipConfig);
 }
 void MainWindow::onStartCollecting() { m_collector->startCollecting(); }
 
@@ -443,6 +525,10 @@ void MainWindow::closeEvent(QCloseEvent *event) {
     m_collector->stopCollecting();
   }
 
+  if (m_reciprocator && m_reciprocator->isBusy()) {
+    m_reciprocator->stopBrowsing();
+  }
+
   if (m_storage) {
     m_storage->flush();
   }
@@ -455,10 +541,20 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 void MainWindow::onReciprocateLike(const QString &userHandle,
                                    const QString &actionId) {
   if (m_reciprocator->isBusy()) {
-    onStatusMessage("回馋引擎忙碌中，请等待当前任务完成...");
+    onStatusMessage("回馈引擎忙碌中，请等待当前任务完成...");
     return;
   }
-  m_reciprocator->startLikeReciprocate(userHandle, actionId);
+  // 单个回馈：启动浏览模式只针对这一个用户
+  QList<QPair<QString, QString>> single;
+  single.append({userHandle, actionId});
+  m_reciprocator->setScrollInterval(m_scrollMinSpin->value(),
+                                    m_scrollMaxSpin->value());
+  m_reciprocator->setLikeWaitInterval(m_likeWaitMinSpin->value(),
+                                      m_likeWaitMaxSpin->value());
+  m_reciprocator->setBrowseRestCycle(
+      m_browseMinSpin->value(), m_browseMaxSpin->value(),
+      m_restMinSpin->value(), m_restMaxSpin->value());
+  m_reciprocator->startBrowsing(single);
 }
 
 void MainWindow::saveLayout() {
@@ -488,18 +584,35 @@ void MainWindow::loadSettings() {
   int pages = settings.value("maxPages", 5).toInt();
   int refreshMin = settings.value("refreshMin", 60).toInt();
   int refreshMax = settings.value("refreshMax", 120).toInt();
-  int batchMin = settings.value("batchMin", 120).toInt();
-  int batchMax = settings.value("batchMax", 180).toInt();
+
+  // 回馈配置
+  int scrollMin = settings.value("scrollMin", 5).toInt();
+  int scrollMax = settings.value("scrollMax", 15).toInt();
+  int likeWaitMin = settings.value("likeWaitMin", 60).toInt();
+  int likeWaitMax = settings.value("likeWaitMax", 180).toInt();
+  int browseMin = settings.value("browseMin", 20).toInt();
+  int browseMax = settings.value("browseMax", 20).toInt();
+  int restMin = settings.value("restMin", 20).toInt();
+  int restMax = settings.value("restMax", 20).toInt();
 
   m_pagesSpin->setValue(pages);
   m_refreshMinSpin->setValue(refreshMin);
   m_refreshMaxSpin->setValue(refreshMax);
-  m_batchMinSpin->setValue(batchMin);
-  m_batchMaxSpin->setValue(batchMax);
+
+  m_scrollMinSpin->setValue(scrollMin);
+  m_scrollMaxSpin->setValue(scrollMax);
+  m_likeWaitMinSpin->setValue(likeWaitMin);
+  m_likeWaitMaxSpin->setValue(likeWaitMax);
+  m_browseMinSpin->setValue(browseMin);
+  m_browseMaxSpin->setValue(browseMax);
+  m_restMinSpin->setValue(restMin);
+  m_restMaxSpin->setValue(restMax);
 
   m_collector->setMaxPages(pages);
   m_collector->setAutoRefreshRange(refreshMin, refreshMax);
-  m_reciprocator->setBatchInterval(batchMin, batchMax);
+  m_reciprocator->setScrollInterval(scrollMin, scrollMax);
+  m_reciprocator->setLikeWaitInterval(likeWaitMin, likeWaitMax);
+  m_reciprocator->setBrowseRestCycle(browseMin, browseMax, restMin, restMax);
 }
 
 void MainWindow::saveSettings() {
@@ -507,8 +620,15 @@ void MainWindow::saveSettings() {
   settings.setValue("maxPages", m_pagesSpin->value());
   settings.setValue("refreshMin", m_refreshMinSpin->value());
   settings.setValue("refreshMax", m_refreshMaxSpin->value());
-  settings.setValue("batchMin", m_batchMinSpin->value());
-  settings.setValue("batchMax", m_batchMaxSpin->value());
+
+  settings.setValue("scrollMin", m_scrollMinSpin->value());
+  settings.setValue("scrollMax", m_scrollMaxSpin->value());
+  settings.setValue("likeWaitMin", m_likeWaitMinSpin->value());
+  settings.setValue("likeWaitMax", m_likeWaitMaxSpin->value());
+  settings.setValue("browseMin", m_browseMinSpin->value());
+  settings.setValue("browseMax", m_browseMaxSpin->value());
+  settings.setValue("restMin", m_restMinSpin->value());
+  settings.setValue("restMax", m_restMaxSpin->value());
 }
 
 void MainWindow::updateCountdownLabel() {
@@ -517,9 +637,12 @@ void MainWindow::updateCountdownLabel() {
     parts << QString::fromUtf8("\xe2\x8f\xb3\xe5\x88\xb7\xe6\x96\xb0:%1s")
                  .arg(m_refreshCountdown);
   }
-  if (m_batchCountdown > 0) {
-    parts << QString::fromUtf8("\xe2\x8f\xb3\xe5\x9b\x9e\xe9\xa6\x88:%1s")
-                 .arg(m_batchCountdown);
+  if (m_sessionCountdown > 0) {
+    int min = m_sessionCountdown / 60;
+    int sec = m_sessionCountdown % 60;
+    parts << QString::fromUtf8("\xe2\x8f\xb3\xe4\xbc\x9a\xe8\xaf\x9d:%1:%2")
+                 .arg(min)
+                 .arg(sec, 2, 10, QChar('0'));
   }
   m_countdownLabel->setText(parts.join("  "));
 }

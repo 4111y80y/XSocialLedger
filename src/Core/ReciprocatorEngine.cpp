@@ -1,276 +1,430 @@
 #include "ReciprocatorEngine.h"
-#include "App/WebView2Handler.h"
 #include "Data/DataStorage.h"
 #include "UI/WebView2Widget.h"
 #include <QDebug>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QRandomGenerator>
 
 ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
                                        DataStorage *storage, QObject *parent)
     : QObject(parent), m_browser(browser), m_storage(storage), m_state(Idle),
-      m_busy(false), m_scrollAttempts(0), m_maxScrollAttempts(15),
-      m_batchDone(0), m_batchTotal(0), m_batchMinInterval(120),
-      m_batchMaxInterval(180), m_batchCountdownRemaining(0),
-      m_batchMode(false) {
+      m_browsing(false), m_scrollCount(0), m_countdownRemaining(0),
+      m_scrollMinSec(5), m_scrollMaxSec(15), m_likeWaitMinSec(60),
+      m_likeWaitMaxSec(180), m_browseMinMin(20), m_browseMaxMin(20),
+      m_restMinMin(20), m_restMaxMin(20) {
 
-  m_stepTimer = new QTimer(this);
-  m_stepTimer->setSingleShot(true);
-  connect(m_stepTimer, &QTimer::timeout, this,
-          &ReciprocatorEngine::onStepTimer);
+  m_scrollTimer = new QTimer(this);
+  m_scrollTimer->setSingleShot(true);
+  connect(m_scrollTimer, &QTimer::timeout, this, &ReciprocatorEngine::doScroll);
+
+  m_sessionTimer = new QTimer(this);
+  m_sessionTimer->setSingleShot(true);
+  connect(m_sessionTimer, &QTimer::timeout, this, [this]() {
+    if (!m_browsing)
+      return;
+    if (m_state == Browsing || m_state == LikePause) {
+      // 浏览时间到，开始休息
+      startRestSession();
+    } else if (m_state == Resting) {
+      // 休息结束，重新开始浏览
+      startBrowseSession();
+    }
+  });
+
+  m_countdownTimer = new QTimer(this);
+  m_countdownTimer->setInterval(1000);
+  connect(m_countdownTimer, &QTimer::timeout, this, [this]() {
+    m_countdownRemaining--;
+    if (m_countdownRemaining > 0) {
+      emit sessionCountdown(m_countdownRemaining);
+    } else {
+      m_countdownTimer->stop();
+    }
+  });
+
+  m_clickMoreTimer = new QTimer(this);
+  m_clickMoreTimer->setInterval(8000); // 每8秒检查一次More按钮
+  connect(m_clickMoreTimer, &QTimer::timeout, this,
+          &ReciprocatorEngine::injectClickMoreScript);
+
   connect(m_browser, &WebView2Widget::loadFinished, this,
           &ReciprocatorEngine::onPageLoaded);
-
-  m_batchTimer = new QTimer(this);
-  m_batchTimer->setSingleShot(true);
-  connect(m_batchTimer, &QTimer::timeout, this, [this]() {
-    m_batchCountdownTimer->stop();
-    if (!m_batchMode || m_batchQueue.isEmpty()) {
-      emit batchFinished();
-      m_batchMode = false;
-      return;
-    }
-    auto next = m_batchQueue.takeFirst();
-    startLikeReciprocate(next.first, next.second);
-  });
-
-  m_batchCountdownTimer = new QTimer(this);
-  m_batchCountdownTimer->setInterval(1000);
-  connect(m_batchCountdownTimer, &QTimer::timeout, this, [this]() {
-    m_batchCountdownRemaining--;
-    if (m_batchCountdownRemaining > 0) {
-      emit batchCountdownTick(m_batchCountdownRemaining);
-    }
-  });
+  connect(m_browser, &WebView2Widget::webMessageReceived, this,
+          &ReciprocatorEngine::onWebMessage);
 }
 
-ReciprocatorEngine::~ReciprocatorEngine() { stop(); }
+ReciprocatorEngine::~ReciprocatorEngine() { stopBrowsing(); }
 
-void ReciprocatorEngine::startLikeReciprocate(const QString &userHandle,
-                                              const QString &actionId) {
-  if (m_busy) {
-    emit statusMessage(QString::fromUtf8(
-        "\xe5\x9b\x9e\xe9\xa6\x88\xe5\xbc\x95\xe6\x93\x8e\xe5\xbf\x99\xe7\xa2"
-        "\x8c\xe4\xb8\xad\xef\xbc\x8c\xe8\xaf\xb7\xe7\xa8\x8d\xe5\x90\x8e..."));
+void ReciprocatorEngine::startBrowsing(
+    const QList<QPair<QString, QString>> &targets) {
+  if (targets.isEmpty())
     return;
+
+  // 构建目标映射
+  m_targetMap.clear();
+  m_likedHandles.clear();
+  for (const auto &pair : targets) {
+    m_targetMap[pair.first.toLower()] = pair.second;
   }
 
-  m_currentHandle = userHandle;
-  m_currentActionId = actionId;
-  m_scrollAttempts = 0;
-  m_busy = true;
+  m_browsing = true;
+  m_scrollCount = 0;
+  setState(NavigatingHome);
 
-  emit reciprocateStarted(userHandle);
-  emit statusMessage(
-      QString::fromUtf8(
-          "\xf0\x9f\x94\x84 \xe5\xbc\x80\xe5\xa7\x8b\xe5\x9b\x9e\xe9\xa6\x88 "
-          "@%1 ...")
-          .arg(userHandle));
+  emit browsingStateChanged("browsing");
+  emit statusMessage(QString::fromUtf8("🚀 开始自动回馈浏览，%1 个待回馈用户")
+                         .arg(int(m_targetMap.size())));
 
-  // Navigate to user profile
-  QString url = "https://x.com/" + userHandle;
-  setState(NavigatingToProfile);
-  m_browser->LoadUrl(url);
+  // 导航到首页
+  m_browser->LoadUrl("https://x.com/home");
 }
 
-void ReciprocatorEngine::stop() {
-  m_stepTimer->stop();
-  m_busy = false;
+void ReciprocatorEngine::stopBrowsing() {
+  m_browsing = false;
   m_state = Idle;
-  m_currentHandle.clear();
-  m_currentActionId.clear();
+  m_scrollTimer->stop();
+  m_sessionTimer->stop();
+  m_countdownTimer->stop();
+  m_clickMoreTimer->stop();
+  m_targetMap.clear();
+  m_likedHandles.clear();
+  m_scrollCount = 0;
+  m_countdownRemaining = 0;
+  emit browsingStateChanged("idle");
+  emit batchFinished();
 }
 
-void ReciprocatorEngine::setState(State state) { m_state = state; }
+void ReciprocatorEngine::setState(State state) {
+  m_state = state;
+  qDebug() << "[ReciprocatorEngine] State ->" << state;
+}
+
+void ReciprocatorEngine::setScrollInterval(int minSec, int maxSec) {
+  m_scrollMinSec = minSec;
+  m_scrollMaxSec = maxSec;
+}
+
+void ReciprocatorEngine::setLikeWaitInterval(int minSec, int maxSec) {
+  m_likeWaitMinSec = minSec;
+  m_likeWaitMaxSec = maxSec;
+}
+
+void ReciprocatorEngine::setBrowseRestCycle(int browseMinMin, int browseMaxMin,
+                                            int restMinMin, int restMaxMin) {
+  m_browseMinMin = browseMinMin;
+  m_browseMaxMin = browseMaxMin;
+  m_restMinMin = restMinMin;
+  m_restMaxMin = restMaxMin;
+}
+
+int ReciprocatorEngine::randomInRange(int minVal, int maxVal) {
+  if (minVal >= maxVal)
+    return minVal;
+  return minVal + QRandomGenerator::global()->bounded(maxVal - minVal + 1);
+}
 
 void ReciprocatorEngine::onPageLoaded(bool success) {
-  if (!m_busy)
+  if (!m_browsing)
     return;
 
-  if (m_state == NavigatingToProfile) {
+  if (m_state == NavigatingHome) {
     if (!success) {
-      emit reciprocateFailed(
-          m_currentHandle,
-          QString::fromUtf8("\xe9\xa1\xb5\xe9\x9d\xa2\xe5\x8a\xa0\xe8\xbd\xbd"
-                            "\xe5\xa4\xb1\xe8\xb4\xa5"));
-      stop();
+      emit statusMessage(QString::fromUtf8("❌ 首页加载失败"));
+      stopBrowsing();
       return;
     }
 
-    emit statusMessage(
-        QString::fromUtf8(
-            "\xe5\xb7\xb2\xe8\xbf\x9b\xe5\x85\xa5 @%1 "
-            "\xe4\xb8\xbb\xe9\xa1\xb5\xef\xbc\x8c\xe7\xad\x89\xe5\xbe\x85\xe5"
-            "\xb8\x96\xe5\xad\x90\xe5\x8a\xa0\xe8\xbd\xbd...")
-            .arg(m_currentHandle));
-    setState(WaitingForTimeline);
+    emit statusMessage(QString::fromUtf8("✅ 已进入首页，开始浏览..."));
+
+    // 等待页面渲染完成后开始浏览
     int delay = 3000 + QRandomGenerator::global()->bounded(2000);
-    m_stepTimer->start(delay);
+    QTimer::singleShot(delay, this, [this]() {
+      if (!m_browsing)
+        return;
+      startBrowseSession();
+    });
   }
 }
 
-void ReciprocatorEngine::onStepTimer() {
-  if (!m_busy)
+void ReciprocatorEngine::startBrowseSession() {
+  if (!m_browsing)
     return;
 
-  switch (m_state) {
-  case WaitingForTimeline:
-    setState(ScanningPosts);
+  setState(Browsing);
+  m_scrollCount = 0;
+  emit browsingStateChanged("browsing");
+  emit statusMessage(QString::fromUtf8("👀 浏览中..."));
+
+  // 设置浏览时长定时器
+  int browseSeconds = randomInRange(m_browseMinMin * 60, m_browseMaxMin * 60);
+  m_sessionTimer->start(browseSeconds * 1000);
+  m_countdownRemaining = browseSeconds;
+  m_countdownTimer->start();
+
+  // 开始自动点击More
+  m_clickMoreTimer->start();
+
+  // 先扫描一次
+  injectScanScript();
+
+  // 开始滚动
+  scheduleNextScroll();
+}
+
+void ReciprocatorEngine::startRestSession() {
+  if (!m_browsing)
+    return;
+
+  setState(Resting);
+  m_scrollTimer->stop();
+  m_clickMoreTimer->stop();
+  emit browsingStateChanged("resting");
+
+  int restSeconds = randomInRange(m_restMinMin * 60, m_restMaxMin * 60);
+  m_sessionTimer->start(restSeconds * 1000);
+  m_countdownRemaining = restSeconds;
+  m_countdownTimer->start();
+
+  emit statusMessage(
+      QString::fromUtf8("😴 休息中... %1 分钟后继续").arg(restSeconds / 60));
+}
+
+void ReciprocatorEngine::scheduleNextScroll() {
+  if (!m_browsing || m_state == Resting || m_state == LikePause)
+    return;
+
+  int delay = randomInRange(m_scrollMinSec, m_scrollMaxSec);
+  m_scrollTimer->start(delay * 1000);
+}
+
+void ReciprocatorEngine::doScroll() {
+  if (!m_browsing || m_state != Browsing)
+    return;
+
+  m_scrollCount++;
+
+  // 模拟人类滚动 - 随机滚动距离
+  int scrollAmount = 300 + QRandomGenerator::global()->bounded(500);
+  QString scrollJs = QString(R"JS(
+(function() {
+    window.scrollBy({ top: %1, behavior: 'smooth' });
+})();
+)JS")
+                         .arg(scrollAmount);
+
+  m_browser->ExecuteJavaScript(scrollJs);
+
+  emit statusMessage(
+      QString::fromUtf8("📜 浏览中... 已滚动 %1 次").arg(m_scrollCount));
+
+  // 滚动后等一会再扫描
+  int scanDelay = 1500 + QRandomGenerator::global()->bounded(1500);
+  QTimer::singleShot(scanDelay, this, [this]() {
+    if (!m_browsing || m_state != Browsing)
+      return;
     injectScanScript();
-    break;
+  });
 
-  case ScanningPosts:
-    setState(ScrollingDown);
-    injectScrollScript();
-    break;
+  // 安排下一次滚动
+  scheduleNextScroll();
+}
 
-  case ClickingLike:
-    injectClickScript();
-    break;
-
-  case WaitingAfterLike:
-    m_storage->markReciprocated(m_currentActionId, true);
-    emit reciprocateSuccess(m_currentHandle, m_currentActionId);
-    stop();
-    if (m_batchMode) {
-      m_batchDone++;
-      emit batchProgress(m_batchDone, m_batchTotal);
-      if (m_batchQueue.isEmpty()) {
-        emit batchFinished();
-        m_batchMode = false;
-      } else {
-        // Random interval for next batch item
-        int interval = m_batchMinInterval +
-                       QRandomGenerator::global()->bounded(
-                           m_batchMaxInterval - m_batchMinInterval + 1);
-        m_batchTimer->start(interval * 1000);
-        m_batchCountdownRemaining = interval;
-        m_batchCountdownTimer->start();
-      }
+QString ReciprocatorEngine::buildTargetHandlesJs() {
+  QStringList handles;
+  for (auto it = m_targetMap.constBegin(); it != m_targetMap.constEnd(); ++it) {
+    if (!m_likedHandles.contains(it.key())) {
+      handles << "'" + it.key() + "'";
     }
-    break;
-
-  case ScrollingDown:
-    injectScrollScript();
-    break;
-
-  default:
-    break;
   }
+  return "[" + handles.join(",") + "]";
 }
 
 void ReciprocatorEngine::injectScanScript() {
-  QString script = R"JS(
-(function() {
-    const articles = document.querySelectorAll('article[data-testid="tweet"]');
-    for (let i = 0; i < articles.length; i++) {
-        const likeBtn = articles[i].querySelector('[data-testid="like"]');
-        if (likeBtn) {
-            articles[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            console.log('[RECIPROCATE_FOUND]' + i);
-            return;
-        }
-    }
-    console.log('[RECIPROCATE_NOTFOUND]' + articles.length);
-})();
-)JS";
+  if (!m_browsing || m_state == Resting)
+    return;
 
-  m_browser->ExecuteJavaScript(script);
-
-  int delay = 2000 + QRandomGenerator::global()->bounded(1000);
-  QTimer::singleShot(delay, this, [this]() {
-    if (!m_busy)
-      return;
-    setState(ClickingLike);
-    m_stepTimer->start(500);
-  });
-}
-
-void ReciprocatorEngine::injectClickScript() {
-  QString script = R"JS(
-(function() {
-    const articles = document.querySelectorAll('article[data-testid="tweet"]');
-    for (const article of articles) {
-        const likeBtn = article.querySelector('[data-testid="like"]');
-        if (likeBtn) {
-            likeBtn.click();
-            console.log('[RECIPROCATE_LIKED]');
-            return;
-        }
-    }
-    console.log('[RECIPROCATE_NOCLICK]');
-})();
-)JS";
-
-  m_browser->ExecuteJavaScript(script);
-
-  int waitAfterLike = 2500 + QRandomGenerator::global()->bounded(2000);
-  setState(WaitingAfterLike);
-  m_stepTimer->start(waitAfterLike);
-}
-
-void ReciprocatorEngine::injectScrollScript() {
-  m_scrollAttempts++;
-  if (m_scrollAttempts > m_maxScrollAttempts) {
-    emit reciprocateFailed(
-        m_currentHandle,
-        QString::fromUtf8("\xe6\xbb\x9a\xe5\x8a\xa8\xe6\xac\xa1\xe6\x95\xb0\xe8"
-                          "\xb6\x85\xe9\x99\x90"));
-    emit statusMessage(
-        QString::fromUtf8("\xe2\x9d\x8c @%1 "
-                          "\xe6\xbb\x9a\xe5\x8a\xa8%"
-                          "2\xe6\xac\xa1\xe4\xbb\x8d\xe6\x9c\xaa\xe6\x89\xbe"
-                          "\xe5\x88\xb0\xe5\x8f\xaf\xe7\x82\xb9\xe8\xb5\x9e\xe7"
-                          "\x9a\x84\xe5\xb8\x96\xe5\xad\x90")
-            .arg(m_currentHandle)
-            .arg(m_maxScrollAttempts));
-    stop();
+  // 检查是否所有目标都已回馈
+  if (m_likedHandles.size() >= m_targetMap.size()) {
+    emit statusMessage(QString::fromUtf8("✅ 所有 %1 个用户已全部回馈！")
+                           .arg(int(m_likedHandles.size())));
+    stopBrowsing();
     return;
   }
 
-  emit statusMessage(
-      QString::fromUtf8(
-          "\xf0\x9f\x93\x9c "
-          "\xe5\x90\x91\xe4\xb8\x8b\xe6\xbb\x9a\xe5\x8a\xa8\xe6\x9f\xa5\xe6\x89"
-          "\xbe @%1 \xe7\x9a\x84\xe5\xb8\x96\xe5\xad\x90 (%2/%3)...")
-          .arg(m_currentHandle)
-          .arg(m_scrollAttempts)
-          .arg(m_maxScrollAttempts));
+  QString handlesJs = buildTargetHandlesJs();
 
+  QString script = QString(R"JS(
+(function() {
+    const targets = new Set(%1);
+    if (targets.size === 0) return;
+
+    const skipPaths = ['home','explore','search','notifications','messages',
+        'settings','i','compose','login','signup','tos','privacy','help',
+        'about','jobs','premium','lists'];
+
+    const articles = document.querySelectorAll('article[data-testid="tweet"]');
+    for (let idx = 0; idx < articles.length; idx++) {
+        const article = articles[idx];
+        const likeBtn = article.querySelector('[data-testid="like"]');
+        if (!likeBtn) continue;
+
+        const links = article.querySelectorAll('a[href]');
+        let author = '';
+        for (const link of links) {
+            const href = link.getAttribute('href');
+            if (!href) continue;
+            const match = href.match(/^\/([a-zA-Z0-9_]+)$/);
+            if (!match) continue;
+            const username = match[1].toLowerCase();
+            if (skipPaths.includes(username)) continue;
+            author = username;
+            break;
+        }
+
+        if (author && targets.has(author)) {
+            article.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            try {
+                window.chrome.webview.postMessage(JSON.stringify({
+                    type: 'reciprocate_target',
+                    handle: author,
+                    index: idx
+                }));
+            } catch(e) {}
+            return;
+        }
+    }
+})();
+)JS")
+                       .arg(handlesJs);
+
+  m_browser->ExecuteJavaScript(script);
+}
+
+void ReciprocatorEngine::injectLikeScript(int articleIndex) {
+  QString script = QString(R"JS(
+(function() {
+    const articles = document.querySelectorAll('article[data-testid="tweet"]');
+    if (%1 < articles.length) {
+        const likeBtn = articles[%1].querySelector('[data-testid="like"]');
+        if (likeBtn) {
+            likeBtn.click();
+            try {
+                window.chrome.webview.postMessage(JSON.stringify({
+                    type: 'like_clicked'
+                }));
+            } catch(e) {}
+        }
+    }
+})();
+)JS")
+                       .arg(articleIndex);
+
+  m_browser->ExecuteJavaScript(script);
+}
+
+void ReciprocatorEngine::injectClickMoreScript() {
+  if (!m_browsing || m_state == Resting)
+    return;
+
+  // 参考 SpotlightX 的 "Show N posts" 自动点击逻辑
   QString script = R"JS(
 (function() {
-    window.scrollBy(0, 600);
+    try {
+        const cells = document.querySelectorAll('[data-testid="cellInnerDiv"]');
+        for (const cell of cells) {
+            const text = cell.textContent || '';
+            if (/show.*post|显示.*帖|条新帖|新的帖子|new post/i.test(text)) {
+                const btn = cell.querySelector('[role="button"]') || cell.querySelector('button');
+                if (btn) {
+                    btn.click();
+                    console.log('[XSocialLedger] Auto-clicked: Show new posts');
+                    break;
+                }
+                cell.click();
+                console.log('[XSocialLedger] Auto-clicked cell: Show new posts');
+                break;
+            }
+        }
+    } catch(e) {}
 })();
 )JS";
 
   m_browser->ExecuteJavaScript(script);
-
-  int delay = 2500 + QRandomGenerator::global()->bounded(2000);
-  QTimer::singleShot(delay, this, [this]() {
-    if (!m_busy)
-      return;
-    setState(ScanningPosts);
-    injectScanScript();
-  });
 }
 
-void ReciprocatorEngine::startBatchReciprocate(
-    const QList<QPair<QString, QString>> &queue) {
-  if (queue.isEmpty())
+void ReciprocatorEngine::onWebMessage(const QString &message) {
+  if (!m_browsing)
     return;
-  m_batchQueue = queue;
-  m_batchDone = 0;
-  m_batchTotal = queue.size();
-  m_batchMode = true;
-  emit batchProgress(0, m_batchTotal);
-  auto first = m_batchQueue.takeFirst();
-  startLikeReciprocate(first.first, first.second);
-}
 
-void ReciprocatorEngine::stopBatch() {
-  m_batchMode = false;
-  m_batchQueue.clear();
-  m_batchTimer->stop();
-  m_batchCountdownTimer->stop();
-  stop();
-  emit batchFinished();
+  QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
+  if (!doc.isObject())
+    return;
+
+  QJsonObject obj = doc.object();
+  QString type = obj.value("type").toString();
+
+  if (type == "reciprocate_target") {
+    // 找到了目标用户的帖子
+    QString handle = obj.value("handle").toString().toLower();
+    int index = obj.value("index").toInt();
+
+    if (m_likedHandles.contains(handle))
+      return;
+
+    emit statusMessage(
+        QString::fromUtf8("🎯 发现 @%1 的帖子，准备点赞...").arg(handle));
+
+    // 暂停滚动
+    m_scrollTimer->stop();
+    setState(LikePause);
+
+    // 等待一小段随机时间后点赞（模拟阅读帖子）
+    int readDelay = 2000 + QRandomGenerator::global()->bounded(3000);
+    QTimer::singleShot(readDelay, this, [this, handle, index]() {
+      if (!m_browsing)
+        return;
+
+      injectLikeScript(index);
+
+      // 记录回馈
+      m_likedHandles.insert(handle);
+      if (m_targetMap.contains(handle)) {
+        QString actionId = m_targetMap.value(handle);
+        m_storage->markReciprocated(actionId, true);
+        emit likedUser(handle, actionId);
+      }
+
+      emit statusMessage(QString::fromUtf8("✅ 已为 @%1 点赞 (%2/%3)")
+                             .arg(handle)
+                             .arg(int(m_likedHandles.size()))
+                             .arg(int(m_targetMap.size())));
+
+      // 检查是否全部完成
+      if (m_likedHandles.size() >= m_targetMap.size()) {
+        emit statusMessage(QString::fromUtf8("🎉 所有 %1 个用户已全部回馈！")
+                               .arg(int(m_likedHandles.size())));
+        stopBrowsing();
+        return;
+      }
+
+      // 点赞后长休眠（模拟人继续浏览一会儿）
+      int likeWait = randomInRange(m_likeWaitMinSec, m_likeWaitMaxSec);
+      emit statusMessage(
+          QString::fromUtf8("⏳ 点赞后等待 %1 秒...").arg(likeWait));
+
+      QTimer::singleShot(likeWait * 1000, this, [this]() {
+        if (!m_browsing)
+          return;
+        // 恢复浏览状态
+        if (m_state == LikePause) {
+          setState(Browsing);
+          scheduleNextScroll();
+        }
+      });
+    });
+
+  } else if (type == "like_clicked") {
+    qDebug() << "[ReciprocatorEngine] Like button clicked via JS";
+  }
 }

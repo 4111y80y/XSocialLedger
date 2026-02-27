@@ -44,10 +44,15 @@ ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
   });
 
   m_clickMoreTimer = new QTimer(this);
-  m_clickMoreTimer->setInterval(
-      150000); // 每2.5分钟检查一次More按钮（会滚回顶部）
-  connect(m_clickMoreTimer, &QTimer::timeout, this,
-          &ReciprocatorEngine::injectClickMoreScript);
+  m_clickMoreTimer->setSingleShot(true); // 每次随机间隔
+  connect(m_clickMoreTimer, &QTimer::timeout, this, [this]() {
+    injectClickMoreScript();
+    // 随机化下次检查间隔: 2-4分钟
+    if (m_browsing && m_state != Resting) {
+      int nextInterval = randomInRange(120, 240) * 1000;
+      m_clickMoreTimer->start(nextInterval);
+    }
+  });
 
   connect(m_browser, &WebView2Widget::loadFinished, this,
           &ReciprocatorEngine::onPageLoaded);
@@ -122,7 +127,12 @@ void ReciprocatorEngine::setBrowseRestCycle(int browseMinMin, int browseMaxMin,
 int ReciprocatorEngine::randomInRange(int minVal, int maxVal) {
   if (minVal >= maxVal)
     return minVal;
-  return minVal + QRandomGenerator::global()->bounded(maxVal - minVal + 1);
+  // 使用三角分布模拟高斯分布（大部分值集中在中间，偶尔极端）
+  // 用两个均匀随机数的平均值，结果近似正态分布
+  int range = maxVal - minVal + 1;
+  int r1 = QRandomGenerator::global()->bounded(range);
+  int r2 = QRandomGenerator::global()->bounded(range);
+  return minVal + (r1 + r2) / 2;
 }
 
 void ReciprocatorEngine::onPageLoaded(bool success) {
@@ -163,8 +173,8 @@ void ReciprocatorEngine::startBrowseSession() {
   m_countdownRemaining = browseSeconds;
   m_countdownTimer->start();
 
-  // 开始自动点击More
-  m_clickMoreTimer->start();
+  // 开始自动点击More（随机间隔 2-4分钟）
+  m_clickMoreTimer->start(randomInRange(120, 240) * 1000);
 
   // 先扫描一次
   injectScanScript();
@@ -217,16 +227,22 @@ void ReciprocatorEngine::doScroll() {
     return;
   }
 
-  // === 优化#1: 滚动距离三档分布 ===
-  // 70%正常看帖(200-600px) + 20%快速划过(800-1500px) + 10%细看(80-200px)
+  // === 优化: 三档滚动距离 + 10%概率向上回滚 ===
   int scrollAmount;
   int roll = QRandomGenerator::global()->bounded(100);
-  if (roll < 70) {
-    scrollAmount = 200 + QRandomGenerator::global()->bounded(401); // 200-600
-  } else if (roll < 90) {
-    scrollAmount = 800 + QRandomGenerator::global()->bounded(701); // 800-1500
+  if (roll < 10) {
+    // 10%概率向上回滚一点（真人偶尔会往回看）
+    scrollAmount =
+        -(100 + QRandomGenerator::global()->bounded(301)); // -100~-400
+  } else if (roll < 75) {
+    // 65%正常看帖 (200-600px)
+    scrollAmount = 200 + QRandomGenerator::global()->bounded(401);
+  } else if (roll < 92) {
+    // 17%快速划过 (800-1500px)
+    scrollAmount = 800 + QRandomGenerator::global()->bounded(701);
   } else {
-    scrollAmount = 80 + QRandomGenerator::global()->bounded(121); // 80-200
+    // 8%细看 (80-200px)
+    scrollAmount = 80 + QRandomGenerator::global()->bounded(121);
   }
 
   QString scrollJs = QString(R"JS(

@@ -10,9 +10,9 @@ ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
                                        DataStorage *storage, QObject *parent)
     : QObject(parent), m_browser(browser), m_storage(storage), m_state(Idle),
       m_browsing(false), m_scrollCount(0), m_countdownRemaining(0),
-      m_scrollMinSec(5), m_scrollMaxSec(15), m_likeWaitMinSec(60),
-      m_likeWaitMaxSec(180), m_browseMinMin(20), m_browseMaxMin(20),
-      m_restMinMin(20), m_restMaxMin(20) {
+      m_scrollMinSec(3), m_scrollMaxSec(8), m_likeWaitMinSec(3),
+      m_likeWaitMaxSec(8), m_browseMinMin(10), m_browseMaxMin(30),
+      m_restMinMin(15), m_restMaxMin(45) {
 
   m_scrollTimer = new QTimer(this);
   m_scrollTimer->setSingleShot(true);
@@ -379,8 +379,8 @@ void ReciprocatorEngine::onWebMessage(const QString &message) {
     m_scrollTimer->stop();
     setState(LikePause);
 
-    // 等待一小段随机时间后点赞（模拟阅读帖子）
-    int readDelay = 2000 + QRandomGenerator::global()->bounded(3000);
+    // 模拟阅读帖子 (1-3秒，真人看到想点赞的帖子会快速反应)
+    int readDelay = 1000 + QRandomGenerator::global()->bounded(2000);
     QTimer::singleShot(readDelay, this, [this, handle, index]() {
       if (!m_browsing)
         return;
@@ -408,15 +408,13 @@ void ReciprocatorEngine::onWebMessage(const QString &message) {
         return;
       }
 
-      // 点赞后长休眠（模拟人继续浏览一会儿）
+      // 点赞后短暂继续浏览（真人点赞后会继续滚动，不会停顿很久）
       int likeWait = randomInRange(m_likeWaitMinSec, m_likeWaitMaxSec);
-      emit statusMessage(
-          QString::fromUtf8("⏳ 点赞后等待 %1 秒...").arg(likeWait));
 
       QTimer::singleShot(likeWait * 1000, this, [this]() {
         if (!m_browsing)
           return;
-        // 恢复浏览状态
+        // 恢复浏览状态，继续正常滚动
         if (m_state == LikePause) {
           setState(Browsing);
           scheduleNextScroll();

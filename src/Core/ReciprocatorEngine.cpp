@@ -44,7 +44,8 @@ ReciprocatorEngine::ReciprocatorEngine(WebView2Widget *browser,
   });
 
   m_clickMoreTimer = new QTimer(this);
-  m_clickMoreTimer->setInterval(8000); // 每8秒检查一次More按钮
+  m_clickMoreTimer->setInterval(
+      150000); // 每2.5分钟检查一次More按钮（会滚回顶部）
   connect(m_clickMoreTimer, &QTimer::timeout, this,
           &ReciprocatorEngine::injectClickMoreScript);
 

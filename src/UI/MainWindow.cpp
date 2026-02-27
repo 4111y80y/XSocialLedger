@@ -15,6 +15,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMessageBox>
+#include <QScrollBar>
 #include <QSettings>
 #include <QStatusBar>
 #include <QToolBar>
@@ -65,19 +66,34 @@ void MainWindow::setupUI() {
   m_browser = new WebView2Widget(m_splitter);
   m_browser->setMinimumWidth(400);
 
-  // 中间 - 记录面板
-  m_actionPanel = new ActionListPanel(m_storage, m_splitter);
+  // 中间 - 记录面板 + 日志（垂直分割）
+  QSplitter *middleSplitter = new QSplitter(Qt::Vertical, m_splitter);
+  m_actionPanel = new ActionListPanel(m_storage, middleSplitter);
   m_actionPanel->setMinimumWidth(300);
+
+  m_logBox = new QTextEdit(middleSplitter);
+  m_logBox->setReadOnly(true);
+  m_logBox->setMaximumHeight(200);
+  m_logBox->setStyleSheet(
+      "QTextEdit { background: #0a0a1a; color: #88cc88; border: 1px solid "
+      "#2a2a4a; font-family: 'Consolas', 'Courier New', monospace; "
+      "font-size: 11px; padding: 4px; }");
+  m_logBox->setPlaceholderText(QString::fromUtf8("动作日志将显示在这里..."));
+
+  middleSplitter->addWidget(m_actionPanel);
+  middleSplitter->addWidget(m_logBox);
+  middleSplitter->setStretchFactor(0, 3); // 记录面板 75%
+  middleSplitter->setStretchFactor(1, 1); // 日志 25%
 
   // 右侧 - 回馈浏览器
   m_recipBrowser = new WebView2Widget(m_splitter);
   m_recipBrowser->setMinimumWidth(400);
 
   m_splitter->addWidget(m_browser);
-  m_splitter->addWidget(m_actionPanel);
+  m_splitter->addWidget(middleSplitter);
   m_splitter->addWidget(m_recipBrowser);
   m_splitter->setStretchFactor(0, 4); // 浏览器 40%
-  m_splitter->setStretchFactor(1, 3); // 面板 30%
+  m_splitter->setStretchFactor(1, 3); // 面板+日志 30%
   m_splitter->setStretchFactor(2, 3); // 回馈浏览器 30%
 
   setCentralWidget(m_splitter);
@@ -503,6 +519,24 @@ void MainWindow::onExportData() {
 
 void MainWindow::onStatusMessage(const QString &message) {
   m_statusLabel->setText(message);
+
+  // 追加到日志文本框（带时间戳）
+  QString timestamp = QDateTime::currentDateTime().toString("HH:mm:ss");
+  m_logBox->append(QString("[%1] %2").arg(timestamp, message));
+
+  // 限制日志行数避免内存增长
+  QTextDocument *doc = m_logBox->document();
+  if (doc->blockCount() > 500) {
+    QTextCursor cursor(doc);
+    cursor.movePosition(QTextCursor::Start);
+    cursor.movePosition(QTextCursor::Down, QTextCursor::KeepAnchor, 100);
+    cursor.removeSelectedText();
+  }
+
+  // 自动滚动到底部
+  m_logBox->verticalScrollBar()->setValue(
+      m_logBox->verticalScrollBar()->maximum());
+
   qDebug() << "[Status]" << message;
 }
 

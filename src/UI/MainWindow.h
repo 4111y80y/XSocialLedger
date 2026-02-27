@@ -6,6 +6,7 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QTextEdit>
 
 class WebView2Widget;
 class ActionListPanel;
@@ -47,6 +48,7 @@ private:
   WebView2Widget *m_browser;
   WebView2Widget *m_recipBrowser;
   ActionListPanel *m_actionPanel;
+  QTextEdit *m_logBox;
 
   QPushButton *m_startBtn;
   QPushButton *m_stopBtn;

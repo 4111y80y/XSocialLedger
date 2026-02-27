@@ -218,6 +218,8 @@ void ReciprocatorEngine::doScroll() {
   // === 优化#4: 偶尔触发长停顿，模拟看到感兴趣的帖子在仔细读 ===
   if (m_scrollCount > 5 && QRandomGenerator::global()->bounded(100) < 15) {
     int pauseSec = 10 + QRandomGenerator::global()->bounded(21); // 10-30秒
+    emit statusMessage(
+        QString::fromUtf8("👀 停下来看帖子... %1秒").arg(pauseSec));
     // 长停顿期间不滚动，只等待
     QTimer::singleShot(pauseSec * 1000, this, [this]() {
       if (!m_browsing || m_state != Browsing)
@@ -234,6 +236,7 @@ void ReciprocatorEngine::doScroll() {
     // 10%概率向上回滚一点（真人偶尔会往回看）
     scrollAmount =
         -(100 + QRandomGenerator::global()->bounded(301)); // -100~-400
+    emit statusMessage(QString::fromUtf8("⬆️ 往回看了看..."));
   } else if (roll < 75) {
     // 65%正常看帖 (200-600px)
     scrollAmount = 200 + QRandomGenerator::global()->bounded(401);
@@ -387,6 +390,8 @@ void ReciprocatorEngine::injectClickMoreScript() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 })();
 )JS";
+
+  emit statusMessage(QString::fromUtf8("⬆️ 滚动到顶部检查新帖子..."));
 
   m_browser->ExecuteJavaScript(scrollTopScript);
 

@@ -205,8 +205,30 @@ void ReciprocatorEngine::doScroll() {
 
   m_scrollCount++;
 
-  // 模拟人类滚动 - 随机滚动距离
-  int scrollAmount = 300 + QRandomGenerator::global()->bounded(500);
+  // === 优化#4: 偶尔触发长停顿，模拟看到感兴趣的帖子在仔细读 ===
+  if (m_scrollCount > 5 && QRandomGenerator::global()->bounded(100) < 15) {
+    int pauseSec = 10 + QRandomGenerator::global()->bounded(21); // 10-30秒
+    // 长停顿期间不滚动，只等待
+    QTimer::singleShot(pauseSec * 1000, this, [this]() {
+      if (!m_browsing || m_state != Browsing)
+        return;
+      scheduleNextScroll();
+    });
+    return;
+  }
+
+  // === 优化#1: 滚动距离三档分布 ===
+  // 70%正常看帖(200-600px) + 20%快速划过(800-1500px) + 10%细看(80-200px)
+  int scrollAmount;
+  int roll = QRandomGenerator::global()->bounded(100);
+  if (roll < 70) {
+    scrollAmount = 200 + QRandomGenerator::global()->bounded(401); // 200-600
+  } else if (roll < 90) {
+    scrollAmount = 800 + QRandomGenerator::global()->bounded(701); // 800-1500
+  } else {
+    scrollAmount = 80 + QRandomGenerator::global()->bounded(121); // 80-200
+  }
+
   QString scrollJs = QString(R"JS(
 (function() {
     window.scrollBy({ top: %1, behavior: 'smooth' });
@@ -216,16 +238,21 @@ void ReciprocatorEngine::doScroll() {
 
   m_browser->ExecuteJavaScript(scrollJs);
 
-  emit statusMessage(
-      QString::fromUtf8("📜 浏览中... 已滚动 %1 次").arg(m_scrollCount));
+  // === 优化#5: 状态消息每10次更新一次 ===
+  if (m_scrollCount % 10 == 0) {
+    emit statusMessage(
+        QString::fromUtf8("📜 浏览中... 已滚动 %1 次").arg(m_scrollCount));
+  }
 
-  // 滚动后等一会再扫描
-  int scanDelay = 1500 + QRandomGenerator::global()->bounded(1500);
-  QTimer::singleShot(scanDelay, this, [this]() {
-    if (!m_browsing || m_state != Browsing)
-      return;
-    injectScanScript();
-  });
+  // === 优化#2: 只有30%的滚动会触发扫描 ===
+  if (QRandomGenerator::global()->bounded(100) < 30) {
+    int scanDelay = 1500 + QRandomGenerator::global()->bounded(1500);
+    QTimer::singleShot(scanDelay, this, [this]() {
+      if (!m_browsing || m_state != Browsing)
+        return;
+      injectScanScript();
+    });
+  }
 
   // 安排下一次滚动
   scheduleNextScroll();
@@ -284,7 +311,7 @@ void ReciprocatorEngine::injectScanScript() {
         }
 
         if (author && targets.has(author)) {
-            article.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // 优化#6: 不做scrollIntoView（太精准不自然），帖子在正常滚动中已在视口附近
             try {
                 window.chrome.webview.postMessage(JSON.stringify({
                     type: 'reciprocate_target',
@@ -303,18 +330,27 @@ void ReciprocatorEngine::injectScanScript() {
 }
 
 void ReciprocatorEngine::injectLikeScript(int articleIndex) {
+  // 优化#3: 模拟鼠标hover效果后再点击
   QString script = QString(R"JS(
 (function() {
     const articles = document.querySelectorAll('article[data-testid="tweet"]');
     if (%1 < articles.length) {
         const likeBtn = articles[%1].querySelector('[data-testid="like"]');
         if (likeBtn) {
-            likeBtn.click();
-            try {
-                window.chrome.webview.postMessage(JSON.stringify({
-                    type: 'like_clicked'
-                }));
-            } catch(e) {}
+            // 先触发hover效果
+            likeBtn.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
+            likeBtn.dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));
+            // 短暂停顿后点击 (200-500ms)
+            const delay = 200 + Math.random() * 300;
+            setTimeout(() => {
+                likeBtn.click();
+                likeBtn.dispatchEvent(new MouseEvent('mouseleave', {bubbles: true}));
+                try {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'like_clicked'
+                    }));
+                } catch(e) {}
+            }, delay);
         }
     }
 })();

@@ -384,47 +384,66 @@ void ReciprocatorEngine::injectClickMoreScript() {
     return;
 
   // X.com 使用虚拟滚动，滚到下方后顶部的 "Show N posts" 按钮会从 DOM 中移除
-  // 所以先滚回顶部，等 DOM 重新渲染，再检测并点击
-  QString scrollTopScript = R"JS(
+  // 所以先滚回顶部，然后持续轮询等待 More 按钮出现并点击
+  emit statusMessage(QString::fromUtf8("⬆️ 滚动到顶部等待新帖子..."));
+
+  // 一个完整的JS脚本：先滚到顶部，然后每2秒检查一次More按钮，最多等20秒
+  QString script = R"JS(
 (function() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-})();
-)JS";
 
-  emit statusMessage(QString::fromUtf8("⬆️ 滚动到顶部检查新帖子..."));
+    let attempts = 0;
+    const maxAttempts = 10; // 10次 x 2秒 = 最多20秒
+    const checkInterval = 2000;
 
-  m_browser->ExecuteJavaScript(scrollTopScript);
-
-  // 等待滚动到顶部+DOM渲染完成后再查找并点击More按钮
-  QTimer::singleShot(1500, this, [this]() {
-    if (!m_browsing || m_state == Resting)
-      return;
-
-    // 参考 SpotlightX 的 "Show N posts" 自动点击逻辑
-    QString script = R"JS(
-(function() {
-    try {
-        const cells = document.querySelectorAll('[data-testid="cellInnerDiv"]');
-        for (const cell of cells) {
-            const text = cell.textContent || '';
-            if (/show.*post|显示.*帖|条新帖|新的帖子|new post/i.test(text)) {
-                const btn = cell.querySelector('[role="button"]') || cell.querySelector('button');
-                if (btn) {
-                    btn.click();
-                    console.log('[XSocialLedger] Auto-clicked: Show new posts');
-                    break;
+    function tryClickMore() {
+        attempts++;
+        try {
+            const cells = document.querySelectorAll('[data-testid="cellInnerDiv"]');
+            for (const cell of cells) {
+                const text = cell.textContent || '';
+                if (/show.*post|显示.*帖|条新帖|新的帖子|new post/i.test(text)) {
+                    const btn = cell.querySelector('[role="button"]') || cell.querySelector('button');
+                    if (btn) {
+                        btn.click();
+                        console.log('[XSocialLedger] Auto-clicked: Show new posts (attempt ' + attempts + ')');
+                        try {
+                            window.chrome.webview.postMessage(JSON.stringify({
+                                type: 'more_clicked', attempts: attempts
+                            }));
+                        } catch(e) {}
+                        return;
+                    }
+                    cell.click();
+                    console.log('[XSocialLedger] Auto-clicked cell: Show new posts (attempt ' + attempts + ')');
+                    try {
+                        window.chrome.webview.postMessage(JSON.stringify({
+                            type: 'more_clicked', attempts: attempts
+                        }));
+                    } catch(e) {}
+                    return;
                 }
-                cell.click();
-                console.log('[XSocialLedger] Auto-clicked cell: Show new posts');
-                break;
             }
+        } catch(e) {}
+
+        if (attempts < maxAttempts) {
+            setTimeout(tryClickMore, checkInterval);
+        } else {
+            console.log('[XSocialLedger] More button not found after ' + maxAttempts + ' attempts');
+            try {
+                window.chrome.webview.postMessage(JSON.stringify({
+                    type: 'more_timeout'
+                }));
+            } catch(e) {}
         }
-    } catch(e) {}
+    }
+
+    // 等1.5秒让页面滚到顶部后开始检查
+    setTimeout(tryClickMore, 1500);
 })();
 )JS";
 
-    m_browser->ExecuteJavaScript(script);
-  });
+  m_browser->ExecuteJavaScript(script);
 }
 
 void ReciprocatorEngine::onWebMessage(const QString &message) {
@@ -498,5 +517,16 @@ void ReciprocatorEngine::onWebMessage(const QString &message) {
 
   } else if (type == "like_clicked") {
     qDebug() << "[ReciprocatorEngine] Like button clicked via JS";
+
+  } else if (type == "more_clicked") {
+    int attempts = obj.value("attempts").toInt();
+    emit statusMessage(
+        QString::fromUtf8("✅ 已加载新帖子 (第%1次尝试)").arg(attempts));
+
+  } else if (type == "more_timeout") {
+    // 超时未找到More按钮，可能网络异常，重新加载首页
+    emit statusMessage(
+        QString::fromUtf8("⚠️ 未发现新帖子按钮，重新加载首页..."));
+    m_browser->LoadUrl("https://x.com/home");
   }
 }

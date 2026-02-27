@@ -381,12 +381,16 @@ void MainWindow::setupConnections() {
       return;
     }
 
-    // Collect pending reciprocations
+    // Collect pending reciprocations (仅最近24小时)
     auto likes = m_storage->loadLikes();
     QList<QPair<QString, QString>> pending;
+    QDateTime cutoff = QDateTime::currentDateTimeUtc().addSecs(-86400);
     for (const auto &a : likes) {
       if (!a.reciprocated) {
-        pending.append({a.userHandle, a.id});
+        QDateTime dt = QDateTime::fromString(a.timestamp, Qt::ISODate);
+        if (dt.isValid() && dt >= cutoff) {
+          pending.append({a.userHandle, a.id});
+        }
       }
     }
     if (pending.isEmpty()) {

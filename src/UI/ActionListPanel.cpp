@@ -65,6 +65,22 @@ void ActionListPanel::setupUI() {
   });
   layout->addWidget(m_hideReciprocatedCheck);
 
+  // 仅24小时过滤复选框
+  m_only24hCheck =
+      new QCheckBox(QString::fromUtf8("\xe4\xbb\x85\xe6\x98\xbe\xe7\xa4\xba"
+                                      "24"
+                                      "\xe5\xb0\x8f\xe6\x97\xb6\xe5\x86\x85"),
+                    this);
+  m_only24hCheck->setStyleSheet(
+      "QCheckBox { color: #a0d2db; padding: 4px 8px; }"
+      "QCheckBox::indicator { width: 16px; height: 16px; }");
+  loadOnly24hSetting();
+  connect(m_only24hCheck, &QCheckBox::toggled, this, [this](bool) {
+    saveOnly24hSetting();
+    refreshAll();
+  });
+  layout->addWidget(m_only24hCheck);
+
   // Tab 页
   m_tabWidget = new QTabWidget(this);
   m_tabWidget->setStyleSheet(
@@ -183,6 +199,18 @@ void ActionListPanel::populateTable(QTableWidget *table, const QString &type) {
         std::remove_if(actions.begin(), actions.end(),
                        [](const SocialAction &a) { return a.reciprocated; }),
         actions.end());
+  }
+
+  // 仅24小时过滤
+  if (m_only24hCheck && m_only24hCheck->isChecked()) {
+    QDateTime cutoff = QDateTime::currentDateTimeUtc().addSecs(-86400);
+    actions.erase(std::remove_if(actions.begin(), actions.end(),
+                                 [&cutoff](const SocialAction &a) {
+                                   QDateTime dt = QDateTime::fromString(
+                                       a.timestamp, Qt::ISODate);
+                                   return !dt.isValid() || dt < cutoff;
+                                 }),
+                  actions.end());
   }
 
   table->setRowCount(actions.size());
@@ -378,4 +406,15 @@ void ActionListPanel::loadHideReciprocatedSetting() {
 void ActionListPanel::saveHideReciprocatedSetting() {
   QSettings settings("XSocialLedger", "XSocialLedger");
   settings.setValue("hideReciprocated", m_hideReciprocatedCheck->isChecked());
+}
+
+void ActionListPanel::loadOnly24hSetting() {
+  QSettings settings("XSocialLedger", "XSocialLedger");
+  bool only24h = settings.value("only24h", true).toBool();
+  m_only24hCheck->setChecked(only24h);
+}
+
+void ActionListPanel::saveOnly24hSetting() {
+  QSettings settings("XSocialLedger", "XSocialLedger");
+  settings.setValue("only24h", m_only24hCheck->isChecked());
 }

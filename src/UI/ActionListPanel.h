@@ -44,6 +44,8 @@ private:
   void populateTable(QTableWidget *table, const QString &type);
   void loadHideReciprocatedSetting();
   void saveHideReciprocatedSetting();
+  void loadOnly24hSetting();
+  void saveOnly24hSetting();
 
   DataStorage *m_storage;
   QTabWidget *m_tabWidget;
@@ -51,6 +53,7 @@ private:
   QTableWidget *m_replyTable;
   QLabel *m_statsLabel;
   QCheckBox *m_hideReciprocatedCheck;
+  QCheckBox *m_only24hCheck;
   StatsPanel *m_statsPanel;
 };
 

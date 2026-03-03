@@ -22,7 +22,6 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 
-
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
   // 初始化数据存储
@@ -807,7 +806,20 @@ void MainWindow::restoreLayout() {
     restoreState(settings.value("windowState").toByteArray());
   }
   if (settings.contains("splitterSizes")) {
-    m_splitter->restoreState(settings.value("splitterSizes").toByteArray());
+    // 只在列数匹配时恢复（避免旧的3列布局压缩新的第4列）
+    QByteArray state = settings.value("splitterSizes").toByteArray();
+    // 保存的列数与当前不符时，跳过恢复，使用默认stretch
+    QSplitter tmpSplitter;
+    tmpSplitter.restoreState(state);
+    if (tmpSplitter.count() == 0 ||
+        m_splitter->count() == tmpSplitter.count()) {
+      m_splitter->restoreState(state);
+    } else {
+      qDebug() << "[MainWindow] Splitter column count changed, skipping "
+                  "restore (saved:"
+               << tmpSplitter.count() << "current:" << m_splitter->count()
+               << ")";
+    }
   }
   qDebug() << "[MainWindow] Layout restored";
 }

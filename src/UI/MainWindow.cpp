@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "ActionListPanel.h"
+#include "Core/ListMonitorEngine.h"
 #include "Core/NotificationCollector.h"
 #include "Core/ReciprocatorEngine.h"
 #include "Data/DataStorage.h"
@@ -20,6 +21,7 @@
 #include <QStatusBar>
 #include <QToolBar>
 #include <QVBoxLayout>
+
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
@@ -87,14 +89,20 @@ void MainWindow::setupUI() {
 
   // 右侧 - 回馈浏览器
   m_recipBrowser = new WebView2Widget(m_splitter);
-  m_recipBrowser->setMinimumWidth(400);
+  m_recipBrowser->setMinimumWidth(350);
+
+  // 最右侧 - LIST监控浏览器
+  m_listBrowser = new WebView2Widget(m_splitter);
+  m_listBrowser->setMinimumWidth(350);
 
   m_splitter->addWidget(m_browser);
   m_splitter->addWidget(middleSplitter);
   m_splitter->addWidget(m_recipBrowser);
-  m_splitter->setStretchFactor(0, 4); // 浏览器 40%
-  m_splitter->setStretchFactor(1, 3); // 面板+日志 30%
-  m_splitter->setStretchFactor(2, 3); // 回馈浏览器 30%
+  m_splitter->addWidget(m_listBrowser);
+  m_splitter->setStretchFactor(0, 3); // 采集浏览器 30%
+  m_splitter->setStretchFactor(1, 2); // 面板+日志 20%
+  m_splitter->setStretchFactor(2, 3); // 回馈浏览器 25%
+  m_splitter->setStretchFactor(3, 3); // LIST浏览器 25%
 
   setCentralWidget(m_splitter);
 
@@ -104,6 +112,10 @@ void MainWindow::setupUI() {
   // 创建回馈引擎
   m_recipBrowser->CreateBrowser("https://x.com");
   m_reciprocator = new ReciprocatorEngine(m_recipBrowser, m_storage, this);
+
+  // 创建LIST监控浏览器和引擎
+  m_listBrowser->CreateBrowser("https://x.com");
+  m_listMonitor = new ListMonitorEngine(m_listBrowser, m_storage, this);
 
   // 状态栏
   m_statusLabel =
@@ -298,10 +310,108 @@ void MainWindow::setupToolBar() {
   m_restMaxSpin->setStyleSheet(spinStyle);
   toolbar->addWidget(m_restMaxSpin);
 
+  toolbar->addSeparator();
+
+  // === LIST监控控件 ===
+  QLabel *listTitle = new QLabel(QString::fromUtf8("📋LIST:"), this);
+  listTitle->setStyleSheet(
+      "color: #ffcc00; font-size: 11px; font-weight: bold;");
+  toolbar->addWidget(listTitle);
+
+  m_listMonitorBtn =
+      new QPushButton(QString::fromUtf8("🔍 启动LIST监控"), this);
+  m_listMonitorBtn->setStyleSheet(
+      "QPushButton { background: #1565c0; color: #e0e0e0; border: 1px solid "
+      "#1976d2; border-radius: 6px; padding: 6px 12px; font-size: 12px; }"
+      "QPushButton:hover { background: #1976d2; }"
+      "QPushButton:pressed { background: #1565c0; }");
+  toolbar->addWidget(m_listMonitorBtn);
+
+  // 点赞间隔
+  QLabel *listLikeLabel = new QLabel(QString::fromUtf8("赞:"), this);
+  listLikeLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
+  toolbar->addWidget(listLikeLabel);
+  m_listLikeMinSpin = new QSpinBox(this);
+  m_listLikeMinSpin->setRange(5, 120);
+  m_listLikeMinSpin->setValue(15);
+  m_listLikeMinSpin->setSuffix("s");
+  m_listLikeMinSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_listLikeMinSpin);
+  toolbar->addWidget(new QLabel("-", this));
+  m_listLikeMaxSpin = new QSpinBox(this);
+  m_listLikeMaxSpin->setRange(5, 300);
+  m_listLikeMaxSpin->setValue(45);
+  m_listLikeMaxSpin->setSuffix("s");
+  m_listLikeMaxSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_listLikeMaxSpin);
+
+  // 滚动间隔
+  QLabel *listScrollLabel = new QLabel(QString::fromUtf8("翻:"), this);
+  listScrollLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
+  toolbar->addWidget(listScrollLabel);
+  m_listScrollMinSpin = new QSpinBox(this);
+  m_listScrollMinSpin->setRange(1, 30);
+  m_listScrollMinSpin->setValue(3);
+  m_listScrollMinSpin->setSuffix("s");
+  m_listScrollMinSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_listScrollMinSpin);
+  toolbar->addWidget(new QLabel("-", this));
+  m_listScrollMaxSpin = new QSpinBox(this);
+  m_listScrollMaxSpin->setRange(1, 60);
+  m_listScrollMaxSpin->setValue(8);
+  m_listScrollMaxSpin->setSuffix("s");
+  m_listScrollMaxSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_listScrollMaxSpin);
+
+  // List停留
+  QLabel *listStayLabel = new QLabel(QString::fromUtf8("留:"), this);
+  listStayLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
+  toolbar->addWidget(listStayLabel);
+  m_listStayMinSpin = new QSpinBox(this);
+  m_listStayMinSpin->setRange(1, 60);
+  m_listStayMinSpin->setValue(3);
+  m_listStayMinSpin->setSuffix("m");
+  m_listStayMinSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_listStayMinSpin);
+  toolbar->addWidget(new QLabel("-", this));
+  m_listStayMaxSpin = new QSpinBox(this);
+  m_listStayMaxSpin->setRange(1, 60);
+  m_listStayMaxSpin->setValue(8);
+  m_listStayMaxSpin->setSuffix("m");
+  m_listStayMaxSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_listStayMaxSpin);
+
+  // 最大点赞数
+  QLabel *maxLikesLabel = new QLabel(QString::fromUtf8("上限:"), this);
+  maxLikesLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
+  toolbar->addWidget(maxLikesLabel);
+  m_listMaxLikesSpin = new QSpinBox(this);
+  m_listMaxLikesSpin->setRange(1, 500);
+  m_listMaxLikesSpin->setValue(50);
+  m_listMaxLikesSpin->setStyleSheet(spinStyle);
+  toolbar->addWidget(m_listMaxLikesSpin);
+
   // Spacer
   QWidget *spacer = new QWidget(this);
   spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   toolbar->addWidget(spacer);
+
+  // List URL 编辑框放在第二行工具栏
+  QToolBar *listToolbar = addToolBar("LIST URLs");
+  listToolbar->setMovable(false);
+
+  QLabel *urlLabel = new QLabel(QString::fromUtf8("List URLs:"), this);
+  urlLabel->setStyleSheet("color: #ffcc00; font-size: 11px;");
+  listToolbar->addWidget(urlLabel);
+
+  m_listUrlsEdit = new QTextEdit(this);
+  m_listUrlsEdit->setMaximumHeight(40);
+  m_listUrlsEdit->setPlaceholderText(
+      QString::fromUtf8("每行一个List URL，如: https://x.com/i/lists/123456"));
+  m_listUrlsEdit->setStyleSheet(
+      "QTextEdit { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
+      "#3a5a8a; border-radius: 4px; font-size: 11px; padding: 2px 6px; }");
+  listToolbar->addWidget(m_listUrlsEdit);
 
   loadSettings();
 }
@@ -470,6 +580,86 @@ void MainWindow::setupConnections() {
           updateRecipConfig);
   connect(m_restMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
           updateRecipConfig);
+
+  // === LIST监控信号 ===
+  connect(m_listMonitor, &ListMonitorEngine::statusMessage, this,
+          &MainWindow::onStatusMessage);
+  connect(m_listMonitor, &ListMonitorEngine::likedPost, this,
+          [this](const QString &, const QString &) {
+            m_actionPanel->refreshAll();
+          });
+
+  // LIST监控启停按钮
+  connect(m_listMonitorBtn, &QPushButton::clicked, this, [this]() {
+    if (m_listMonitor->isRunning()) {
+      m_listMonitor->stop();
+      m_listMonitorBtn->setText(QString::fromUtf8("🔍 启动LIST监控"));
+      m_listMonitorBtn->setStyleSheet(
+          "QPushButton { background: #1565c0; color: #e0e0e0; border: 1px "
+          "solid #1976d2; border-radius: 6px; padding: 6px 12px; font-size: "
+          "12px; }QPushButton:hover { background: #1976d2; }");
+      onStatusMessage(QString::fromUtf8("⏹ LIST监控已停止"));
+      return;
+    }
+
+    // 解析URL列表
+    QString text = m_listUrlsEdit->toPlainText().trimmed();
+    QStringList urls;
+    for (const QString &line : text.split('\n')) {
+      QString url = line.trimmed();
+      if (!url.isEmpty() && url.startsWith("http")) {
+        urls.append(url);
+      }
+    }
+    if (urls.isEmpty()) {
+      onStatusMessage(QString::fromUtf8("⚠️ 请输入至少一个List URL"));
+      return;
+    }
+
+    // 应用风控设置
+    m_listMonitor->setLikeInterval(m_listLikeMinSpin->value(),
+                                   m_listLikeMaxSpin->value());
+    m_listMonitor->setScrollInterval(m_listScrollMinSpin->value(),
+                                     m_listScrollMaxSpin->value());
+    m_listMonitor->setListStayDuration(m_listStayMinSpin->value(),
+                                       m_listStayMaxSpin->value());
+    m_listMonitor->setMaxLikesPerSession(m_listMaxLikesSpin->value());
+
+    saveSettings();
+    m_listMonitor->start(urls);
+
+    m_listMonitorBtn->setText(QString::fromUtf8("⏹ 停止LIST监控"));
+    m_listMonitorBtn->setStyleSheet(
+        "QPushButton { background: #b71c1c; color: #e0e0e0; border: 1px solid "
+        "#d32f2f; border-radius: 6px; padding: 6px 12px; font-size: 12px; }"
+        "QPushButton:hover { background: #d32f2f; }");
+  });
+
+  // LIST风控SpinBox变化 -> 实时生效 + 保存
+  auto updateListConfig = [this]() {
+    m_listMonitor->setLikeInterval(m_listLikeMinSpin->value(),
+                                   m_listLikeMaxSpin->value());
+    m_listMonitor->setScrollInterval(m_listScrollMinSpin->value(),
+                                     m_listScrollMaxSpin->value());
+    m_listMonitor->setListStayDuration(m_listStayMinSpin->value(),
+                                       m_listStayMaxSpin->value());
+    m_listMonitor->setMaxLikesPerSession(m_listMaxLikesSpin->value());
+    saveSettings();
+  };
+  connect(m_listLikeMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateListConfig);
+  connect(m_listLikeMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateListConfig);
+  connect(m_listScrollMinSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+          this, updateListConfig);
+  connect(m_listScrollMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+          this, updateListConfig);
+  connect(m_listStayMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateListConfig);
+  connect(m_listStayMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateListConfig);
+  connect(m_listMaxLikesSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateListConfig);
 }
 void MainWindow::onStartCollecting() { m_collector->startCollecting(); }
 
@@ -571,8 +761,13 @@ void MainWindow::closeEvent(QCloseEvent *event) {
     m_storage->flush();
   }
 
+  if (m_listMonitor && m_listMonitor->isRunning()) {
+    m_listMonitor->stop();
+  }
+
   m_browser->CloseBrowser();
   m_recipBrowser->CloseBrowser();
+  m_listBrowser->CloseBrowser();
   event->accept();
 }
 
@@ -651,6 +846,24 @@ void MainWindow::loadSettings() {
   m_reciprocator->setScrollInterval(scrollMin, scrollMax);
   m_reciprocator->setLikeWaitInterval(likeWaitMin, likeWaitMax);
   m_reciprocator->setBrowseRestCycle(browseMin, browseMax, restMin, restMax);
+
+  // LIST监控配置
+  m_listLikeMinSpin->setValue(settings.value("listLikeMin", 15).toInt());
+  m_listLikeMaxSpin->setValue(settings.value("listLikeMax", 45).toInt());
+  m_listScrollMinSpin->setValue(settings.value("listScrollMin", 3).toInt());
+  m_listScrollMaxSpin->setValue(settings.value("listScrollMax", 8).toInt());
+  m_listStayMinSpin->setValue(settings.value("listStayMin", 3).toInt());
+  m_listStayMaxSpin->setValue(settings.value("listStayMax", 8).toInt());
+  m_listMaxLikesSpin->setValue(settings.value("listMaxLikes", 50).toInt());
+  m_listUrlsEdit->setPlainText(settings.value("listUrls", "").toString());
+
+  m_listMonitor->setLikeInterval(m_listLikeMinSpin->value(),
+                                 m_listLikeMaxSpin->value());
+  m_listMonitor->setScrollInterval(m_listScrollMinSpin->value(),
+                                   m_listScrollMaxSpin->value());
+  m_listMonitor->setListStayDuration(m_listStayMinSpin->value(),
+                                     m_listStayMaxSpin->value());
+  m_listMonitor->setMaxLikesPerSession(m_listMaxLikesSpin->value());
 }
 
 void MainWindow::saveSettings() {
@@ -667,6 +880,16 @@ void MainWindow::saveSettings() {
   settings.setValue("browseMax", m_browseMaxSpin->value());
   settings.setValue("restMin", m_restMinSpin->value());
   settings.setValue("restMax", m_restMaxSpin->value());
+
+  // LIST监控配置
+  settings.setValue("listLikeMin", m_listLikeMinSpin->value());
+  settings.setValue("listLikeMax", m_listLikeMaxSpin->value());
+  settings.setValue("listScrollMin", m_listScrollMinSpin->value());
+  settings.setValue("listScrollMax", m_listScrollMaxSpin->value());
+  settings.setValue("listStayMin", m_listStayMinSpin->value());
+  settings.setValue("listStayMax", m_listStayMaxSpin->value());
+  settings.setValue("listMaxLikes", m_listMaxLikesSpin->value());
+  settings.setValue("listUrls", m_listUrlsEdit->toPlainText());
 }
 
 void MainWindow::updateCountdownLabel() {

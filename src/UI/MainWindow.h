@@ -13,6 +13,7 @@ class ActionListPanel;
 class DataStorage;
 class NotificationCollector;
 class ReciprocatorEngine;
+class ListMonitorEngine;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -47,6 +48,7 @@ private:
   QSplitter *m_splitter;
   WebView2Widget *m_browser;
   WebView2Widget *m_recipBrowser;
+  WebView2Widget *m_listBrowser;
   ActionListPanel *m_actionPanel;
   QTextEdit *m_logBox;
 
@@ -69,6 +71,17 @@ private:
   QSpinBox *m_restMinSpin;     // 休息时长最小(分钟)
   QSpinBox *m_restMaxSpin;     // 休息时长最大(分钟)
 
+  // LIST监控控件
+  QPushButton *m_listMonitorBtn;
+  QTextEdit *m_listUrlsEdit;
+  QSpinBox *m_listLikeMinSpin;   // 点赞间隔最小(秒)
+  QSpinBox *m_listLikeMaxSpin;   // 点赞间隔最大(秒)
+  QSpinBox *m_listScrollMinSpin; // 滚动间隔最小(秒)
+  QSpinBox *m_listScrollMaxSpin; // 滚动间隔最大(秒)
+  QSpinBox *m_listStayMinSpin;   // List停留最小(分钟)
+  QSpinBox *m_listStayMaxSpin;   // List停留最大(分钟)
+  QSpinBox *m_listMaxLikesSpin;  // 单次最大点赞数
+
   // Status bar
   QLabel *m_statusLabel;
   QLabel *m_countdownLabel;
@@ -79,6 +92,7 @@ private:
   DataStorage *m_storage;
   NotificationCollector *m_collector;
   ReciprocatorEngine *m_reciprocator;
+  ListMonitorEngine *m_listMonitor;
 };
 
 #endif // MAINWINDOW_H

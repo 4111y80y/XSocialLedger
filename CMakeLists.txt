@@ -51,6 +51,8 @@ set(PROJECT_SOURCES
     src/Core/NotificationCollector.cpp
     src/Core/ReciprocatorEngine.h
     src/Core/ReciprocatorEngine.cpp
+    src/Core/ListMonitorEngine.h
+    src/Core/ListMonitorEngine.cpp
 )
 
 # Create executable

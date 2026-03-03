@@ -419,6 +419,10 @@ void MainWindow::setupToolBar() {
     maxLikes->setStyleSheet(spinStyle);
     form->addRow("单次点赞上限:", maxLikes);
 
+    QSpinBox *lrMin, *lrMax;
+    addRange("达标后休息:", m_listRestMinSpin, m_listRestMaxSpin, 1, 120, "m",
+             lrMin, lrMax);
+
     layout->addWidget(grp);
     QPushButton *okBtn = new QPushButton("确定", &dlg);
     okBtn->setStyleSheet(
@@ -436,6 +440,8 @@ void MainWindow::setupToolBar() {
       m_listStayMinSpin->setValue(lstMin->value());
       m_listStayMaxSpin->setValue(lstMax->value());
       m_listMaxLikesSpin->setValue(maxLikes->value());
+      m_listRestMinSpin->setValue(lrMin->value());
+      m_listRestMaxSpin->setValue(lrMax->value());
     }
   });
 
@@ -520,6 +526,14 @@ void MainWindow::setupToolBar() {
   m_listMaxLikesSpin->setRange(1, 500);
   m_listMaxLikesSpin->setValue(50);
   m_listMaxLikesSpin->hide();
+  m_listRestMinSpin = new QSpinBox(this);
+  m_listRestMinSpin->setRange(1, 120);
+  m_listRestMinSpin->setValue(10);
+  m_listRestMinSpin->hide();
+  m_listRestMaxSpin = new QSpinBox(this);
+  m_listRestMaxSpin->setRange(1, 120);
+  m_listRestMaxSpin->setValue(30);
+  m_listRestMaxSpin->hide();
   m_listUrlsEdit = new QTextEdit(this);
   m_listUrlsEdit->hide();
 
@@ -734,6 +748,8 @@ void MainWindow::setupConnections() {
     m_listMonitor->setListStayDuration(m_listStayMinSpin->value(),
                                        m_listStayMaxSpin->value());
     m_listMonitor->setMaxLikesPerSession(m_listMaxLikesSpin->value());
+    m_listMonitor->setRestInterval(m_listRestMinSpin->value(),
+                                   m_listRestMaxSpin->value());
 
     saveSettings();
     m_listMonitor->start(urls);
@@ -754,6 +770,8 @@ void MainWindow::setupConnections() {
     m_listMonitor->setListStayDuration(m_listStayMinSpin->value(),
                                        m_listStayMaxSpin->value());
     m_listMonitor->setMaxLikesPerSession(m_listMaxLikesSpin->value());
+    m_listMonitor->setRestInterval(m_listRestMinSpin->value(),
+                                   m_listRestMaxSpin->value());
     saveSettings();
   };
   connect(m_listLikeMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
@@ -769,6 +787,10 @@ void MainWindow::setupConnections() {
   connect(m_listStayMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
           updateListConfig);
   connect(m_listMaxLikesSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateListConfig);
+  connect(m_listRestMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          updateListConfig);
+  connect(m_listRestMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
           updateListConfig);
 }
 void MainWindow::onStartCollecting() { m_collector->startCollecting(); }
@@ -974,6 +996,10 @@ void MainWindow::loadSettings() {
   m_listMonitor->setListStayDuration(m_listStayMinSpin->value(),
                                      m_listStayMaxSpin->value());
   m_listMonitor->setMaxLikesPerSession(m_listMaxLikesSpin->value());
+  m_listRestMinSpin->setValue(settings.value("listRestMin", 10).toInt());
+  m_listRestMaxSpin->setValue(settings.value("listRestMax", 30).toInt());
+  m_listMonitor->setRestInterval(m_listRestMinSpin->value(),
+                                 m_listRestMaxSpin->value());
 }
 
 void MainWindow::saveSettings() {
@@ -999,6 +1025,8 @@ void MainWindow::saveSettings() {
   settings.setValue("listStayMin", m_listStayMinSpin->value());
   settings.setValue("listStayMax", m_listStayMaxSpin->value());
   settings.setValue("listMaxLikes", m_listMaxLikesSpin->value());
+  settings.setValue("listRestMin", m_listRestMinSpin->value());
+  settings.setValue("listRestMax", m_listRestMaxSpin->value());
   settings.setValue("listUrls", m_listUrlsEdit->toPlainText());
 }
 

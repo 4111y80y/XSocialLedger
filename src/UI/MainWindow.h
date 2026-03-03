@@ -81,6 +81,8 @@ private:
   QSpinBox *m_listStayMinSpin;   // List停留最小(分钟)
   QSpinBox *m_listStayMaxSpin;   // List停留最大(分钟)
   QSpinBox *m_listMaxLikesSpin;  // 单次最大点赞数
+  QSpinBox *m_listRestMinSpin;   // 休息间隔最小(分钟)
+  QSpinBox *m_listRestMaxSpin;   // 休息间隔最大(分钟)
 
   // Status bar
   QLabel *m_statusLabel;

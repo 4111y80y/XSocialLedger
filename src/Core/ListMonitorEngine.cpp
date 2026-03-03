@@ -16,7 +16,8 @@ ListMonitorEngine::ListMonitorEngine(WebView2Widget *browser,
       // 风控默认值
       m_likeIntervalMinSec(15), m_likeIntervalMaxSec(45), m_scrollMinSec(3),
       m_scrollMaxSec(8), m_listStayMinMin(3), m_listStayMaxMin(8),
-      m_switchWaitMinSec(10), m_switchWaitMaxSec(30), m_maxLikesPerSession(50) {
+      m_switchWaitMinSec(10), m_switchWaitMaxSec(30), m_maxLikesPerSession(50),
+      m_restMinMin(10), m_restMaxMin(30) {
 
   m_scrollTimer = new QTimer(this);
   m_scrollTimer->setSingleShot(true);
@@ -87,6 +88,11 @@ void ListMonitorEngine::setSwitchWait(int minSec, int maxSec) {
 
 void ListMonitorEngine::setMaxLikesPerSession(int maxLikes) {
   m_maxLikesPerSession = maxLikes;
+}
+
+void ListMonitorEngine::setRestInterval(int minMin, int maxMin) {
+  m_restMinMin = minMin;
+  m_restMaxMin = maxMin;
 }
 
 int ListMonitorEngine::randomInRange(int minVal, int maxVal) {
@@ -162,9 +168,26 @@ void ListMonitorEngine::doScroll() {
 
   // 检查是否超过最大点赞数
   if (m_sessionLikeCount >= m_maxLikesPerSession) {
-    emit statusMessage(QString::fromUtf8("🛑 已达到单次最大点赞数 %1，停止监控")
-                           .arg(m_maxLikesPerSession));
-    stop();
+    // 进入休息状态，而不是停止
+    m_scrollTimer->stop();
+    m_listStayTimer->stop();
+    setState(Resting);
+
+    int restMin = randomInRange(m_restMinMin, m_restMaxMin);
+    emit statusMessage(
+        QString::fromUtf8("😴 已达单次上限 %1，休息 %2 分钟后继续...")
+            .arg(m_maxLikesPerSession)
+            .arg(restMin));
+
+    QTimer::singleShot(restMin * 60 * 1000, this, [this]() {
+      if (!m_running)
+        return;
+      m_sessionLikeCount = 0;
+      emit statusMessage(
+          QString::fromUtf8("🔄 休息结束，重置计数器，继续监控"));
+      setState(Scanning);
+      navigateToCurrentList();
+    });
     return;
   }
 
@@ -335,8 +358,26 @@ void ListMonitorEngine::onWebMessage(const QString &message) {
 
     // 风控：检查点赞数上限
     if (m_sessionLikeCount >= m_maxLikesPerSession) {
-      emit statusMessage(QString::fromUtf8("🛑 已达最大点赞数，停止"));
-      stop();
+      // 进入休息
+      m_scrollTimer->stop();
+      m_listStayTimer->stop();
+      setState(Resting);
+
+      int restMin = randomInRange(m_restMinMin, m_restMaxMin);
+      emit statusMessage(
+          QString::fromUtf8("😴 已达上限 %1，休息 %2 分钟后继续...")
+              .arg(m_maxLikesPerSession)
+              .arg(restMin));
+
+      QTimer::singleShot(restMin * 60 * 1000, this, [this]() {
+        if (!m_running)
+          return;
+        m_sessionLikeCount = 0;
+        emit statusMessage(
+            QString::fromUtf8("🔄 休息结束，重置计数器，继续监控"));
+        setState(Scanning);
+        navigateToCurrentList();
+      });
       return;
     }
 

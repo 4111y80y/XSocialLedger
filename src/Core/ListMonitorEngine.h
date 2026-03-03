@@ -29,6 +29,7 @@ public:
   void setListStayDuration(int minMin, int maxMin);
   void setSwitchWait(int minSec, int maxSec);
   void setMaxLikesPerSession(int maxLikes);
+  void setRestInterval(int minMin, int maxMin);
 
 signals:
   void statusMessage(const QString &message);
@@ -45,7 +46,8 @@ private:
     NavigatingList, // 正在导航到List页面
     Scanning,       // 浏览中 - 滚动+扫描+点赞
     LikePause,      // 点赞后暂停
-    SwitchingList   // 切换List等待中
+    SwitchingList,  // 切换List等待中
+    Resting         // 达到上限后休息中
   };
 
   void setState(State state);
@@ -86,6 +88,8 @@ private:
   int m_switchWaitMinSec;   // 切换等待最小(秒) 默认10
   int m_switchWaitMaxSec;   // 切换等待最大(秒) 默认30
   int m_maxLikesPerSession; // 单次会话最大点赞 默认50
+  int m_restMinMin;         // 休息间隔最小(分钟) 默认10
+  int m_restMaxMin;         // 休息间隔最大(分钟) 默认30
 };
 
 #endif // LISTMONITORENGINE_H

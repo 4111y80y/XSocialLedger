@@ -8,10 +8,14 @@
 #include "WebView2Widget.h"
 #include <QApplication>
 #include <QCloseEvent>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDebug>
+#include <QDialog>
 #include <QFile>
 #include <QFileDialog>
+#include <QFormLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -112,7 +116,9 @@ void MainWindow::setupUI() {
   m_recipBrowser->CreateBrowser("https://x.com");
   m_reciprocator = new ReciprocatorEngine(m_recipBrowser, m_storage, this);
 
-  // 创建LIST监控浏览器和引擎
+  // 创建LIST监控浏览器和引擎（使用独立用户数据目录）
+  m_listBrowser->SetUserDataFolder(QCoreApplication::applicationDirPath() +
+                                   "/userdata_list");
   m_listBrowser->CreateBrowser("https://x.com");
   m_listMonitor = new ListMonitorEngine(m_listBrowser, m_storage, this);
 
@@ -146,9 +152,16 @@ void MainWindow::setupToolBar() {
                      "QPushButton:disabled { background: #1a1a2e; color: "
                      "#555566; border-color: #2a2a3a; }";
 
+  QString gearStyle =
+      "QPushButton { background: #2a2a4a; color: #e0e0e0; "
+      "border: 1px solid #3a5a8a; border-radius: 6px; padding: 4px 10px; "
+      "font-size: 14px; min-width: 30px; }"
+      "QPushButton:hover { background: #3a3a6a; }";
+
   QString spinStyle =
       "QSpinBox { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
-      "#3a5a8a; border-radius: 4px; padding: 2px 6px; min-width: 50px; }";
+      "#3a5a8a; border-radius: 4px; padding: 4px 8px; min-width: 60px; "
+      "font-size: 12px; }";
 
   m_startBtn = new QPushButton("▶ 开始采集", this);
   m_startBtn->setStyleSheet("QPushButton { background: #1b5e20; color: "
@@ -186,36 +199,60 @@ void MainWindow::setupToolBar() {
 
   toolbar->addSeparator();
 
-  // Pages spinbox
-  QLabel *pagesLabel = new QLabel("Pages:", this);
-  pagesLabel->setStyleSheet("color: #a0a0c0;");
-  toolbar->addWidget(pagesLabel);
-  m_pagesSpin = new QSpinBox(this);
-  m_pagesSpin->setRange(1, 50);
-  m_pagesSpin->setValue(5);
-  m_pagesSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_pagesSpin);
+  // ⚙ 采集设置 齿轮按钮
+  QPushButton *collectGearBtn =
+      new QPushButton(QString::fromUtf8("⚙ 采集"), this);
+  collectGearBtn->setStyleSheet(gearStyle);
+  toolbar->addWidget(collectGearBtn);
+  connect(collectGearBtn, &QPushButton::clicked, this, [this, spinStyle]() {
+    QDialog dlg(this);
+    dlg.setWindowTitle("采集设置");
+    dlg.setStyleSheet(
+        "QDialog { background: #12122a; }"
+        "QLabel { color: #e0e0e0; font-size: 12px; }"
+        "QGroupBox { color: #ffcc00; border: 1px solid #3a5a8a; "
+        "border-radius: 6px; margin-top: 8px; padding-top: 16px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 10px; }");
+    QVBoxLayout *layout = new QVBoxLayout(&dlg);
 
-  // Refresh interval range
-  QLabel *refreshLabel =
-      new QLabel(QString::fromUtf8("\xe5\x88\xb7\xe6\x96\xb0:"), this);
-  refreshLabel->setStyleSheet("color: #a0a0c0;");
-  toolbar->addWidget(refreshLabel);
-  m_refreshMinSpin = new QSpinBox(this);
-  m_refreshMinSpin->setRange(10, 600);
-  m_refreshMinSpin->setValue(60);
-  m_refreshMinSpin->setSuffix("s");
-  m_refreshMinSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_refreshMinSpin);
-  QLabel *refreshDash = new QLabel("-", this);
-  refreshDash->setStyleSheet("color: #a0a0c0;");
-  toolbar->addWidget(refreshDash);
-  m_refreshMaxSpin = new QSpinBox(this);
-  m_refreshMaxSpin->setRange(10, 600);
-  m_refreshMaxSpin->setValue(120);
-  m_refreshMaxSpin->setSuffix("s");
-  m_refreshMaxSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_refreshMaxSpin);
+    QGroupBox *grp = new QGroupBox("采集参数", &dlg);
+    QFormLayout *form = new QFormLayout(grp);
+    QSpinBox *pages = new QSpinBox(&dlg);
+    pages->setRange(1, 50);
+    pages->setValue(m_pagesSpin->value());
+    pages->setStyleSheet(spinStyle);
+    form->addRow("采集页数:", pages);
+
+    QHBoxLayout *refreshRow = new QHBoxLayout();
+    QSpinBox *rMin = new QSpinBox(&dlg);
+    rMin->setRange(10, 600);
+    rMin->setValue(m_refreshMinSpin->value());
+    rMin->setSuffix("s");
+    rMin->setStyleSheet(spinStyle);
+    QSpinBox *rMax = new QSpinBox(&dlg);
+    rMax->setRange(10, 600);
+    rMax->setValue(m_refreshMaxSpin->value());
+    rMax->setSuffix("s");
+    rMax->setStyleSheet(spinStyle);
+    refreshRow->addWidget(rMin);
+    refreshRow->addWidget(new QLabel("-"));
+    refreshRow->addWidget(rMax);
+    form->addRow("刷新间隔:", refreshRow);
+
+    layout->addWidget(grp);
+    QPushButton *okBtn = new QPushButton("确定", &dlg);
+    okBtn->setStyleSheet(
+        "QPushButton { background: #1b5e20; color: #e0e0e0; border-radius: "
+        "6px; padding: 6px 20px; }QPushButton:hover { background: #2e7d32; }");
+    layout->addWidget(okBtn);
+    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    if (dlg.exec() == QDialog::Accepted) {
+      m_pagesSpin->setValue(pages->value());
+      m_refreshMinSpin->setValue(rMin->value());
+      m_refreshMaxSpin->setValue(rMax->value());
+    }
+  });
 
   toolbar->addSeparator();
 
@@ -234,89 +271,78 @@ void MainWindow::setupToolBar() {
       "border-color: #2a2a3a; }");
   toolbar->addWidget(m_batchBtn);
 
-  toolbar->addSeparator();
+  // ⚙ 回馈设置 齿轮按钮
+  QPushButton *recipGearBtn =
+      new QPushButton(QString::fromUtf8("⚙ 回馈"), this);
+  recipGearBtn->setStyleSheet(gearStyle);
+  toolbar->addWidget(recipGearBtn);
+  connect(recipGearBtn, &QPushButton::clicked, this, [this, spinStyle]() {
+    QDialog dlg(this);
+    dlg.setWindowTitle("回馈设置");
+    dlg.setStyleSheet(
+        "QDialog { background: #12122a; }"
+        "QLabel { color: #e0e0e0; font-size: 12px; }"
+        "QGroupBox { color: #ffcc00; border: 1px solid #3a5a8a; "
+        "border-radius: 6px; margin-top: 8px; padding-top: 16px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 10px; }");
+    QVBoxLayout *layout = new QVBoxLayout(&dlg);
 
-  // === 回馈配置控件 ===
-  // 滚动间隔
-  QLabel *scrollLabel = new QLabel(QString::fromUtf8("滚动:"), this);
-  scrollLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
-  toolbar->addWidget(scrollLabel);
-  m_scrollMinSpin = new QSpinBox(this);
-  m_scrollMinSpin->setRange(1, 30);
-  m_scrollMinSpin->setValue(3);
-  m_scrollMinSpin->setSuffix("s");
-  m_scrollMinSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_scrollMinSpin);
-  toolbar->addWidget(new QLabel("-", this));
-  m_scrollMaxSpin = new QSpinBox(this);
-  m_scrollMaxSpin->setRange(1, 60);
-  m_scrollMaxSpin->setValue(8);
-  m_scrollMaxSpin->setSuffix("s");
-  m_scrollMaxSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_scrollMaxSpin);
+    QGroupBox *grp = new QGroupBox("回馈参数", &dlg);
+    QFormLayout *form = new QFormLayout(grp);
 
-  // 点赞等待
-  QLabel *likeLabel = new QLabel(QString::fromUtf8("点赞:"), this);
-  likeLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
-  toolbar->addWidget(likeLabel);
-  m_likeWaitMinSpin = new QSpinBox(this);
-  m_likeWaitMinSpin->setRange(1, 60);
-  m_likeWaitMinSpin->setValue(3);
-  m_likeWaitMinSpin->setSuffix("s");
-  m_likeWaitMinSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_likeWaitMinSpin);
-  toolbar->addWidget(new QLabel("-", this));
-  m_likeWaitMaxSpin = new QSpinBox(this);
-  m_likeWaitMaxSpin->setRange(1, 120);
-  m_likeWaitMaxSpin->setValue(8);
-  m_likeWaitMaxSpin->setSuffix("s");
-  m_likeWaitMaxSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_likeWaitMaxSpin);
+    auto addRange = [&](const QString &label, QSpinBox *srcMin,
+                        QSpinBox *srcMax, int lo, int hi, const QString &suf,
+                        QSpinBox *&outMin, QSpinBox *&outMax) {
+      QHBoxLayout *row = new QHBoxLayout();
+      outMin = new QSpinBox(&dlg);
+      outMin->setRange(lo, hi);
+      outMin->setValue(srcMin->value());
+      outMin->setSuffix(suf);
+      outMin->setStyleSheet(spinStyle);
+      outMax = new QSpinBox(&dlg);
+      outMax->setRange(lo, hi);
+      outMax->setValue(srcMax->value());
+      outMax->setSuffix(suf);
+      outMax->setStyleSheet(spinStyle);
+      row->addWidget(outMin);
+      row->addWidget(new QLabel("-"));
+      row->addWidget(outMax);
+      form->addRow(label, row);
+    };
 
-  // 浏览时长
-  QLabel *browseLabel = new QLabel(QString::fromUtf8("浏览:"), this);
-  browseLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
-  toolbar->addWidget(browseLabel);
-  m_browseMinSpin = new QSpinBox(this);
-  m_browseMinSpin->setRange(1, 120);
-  m_browseMinSpin->setValue(10);
-  m_browseMinSpin->setSuffix("m");
-  m_browseMinSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_browseMinSpin);
-  toolbar->addWidget(new QLabel("-", this));
-  m_browseMaxSpin = new QSpinBox(this);
-  m_browseMaxSpin->setRange(1, 120);
-  m_browseMaxSpin->setValue(30);
-  m_browseMaxSpin->setSuffix("m");
-  m_browseMaxSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_browseMaxSpin);
+    QSpinBox *sMin, *sMax, *lMin, *lMax, *bMin, *bMax, *rMin, *rMax;
+    addRange("滚动间隔:", m_scrollMinSpin, m_scrollMaxSpin, 1, 60, "s", sMin,
+             sMax);
+    addRange("点赞等待:", m_likeWaitMinSpin, m_likeWaitMaxSpin, 1, 120, "s",
+             lMin, lMax);
+    addRange("浏览时长:", m_browseMinSpin, m_browseMaxSpin, 1, 120, "m", bMin,
+             bMax);
+    addRange("休息时长:", m_restMinSpin, m_restMaxSpin, 1, 120, "m", rMin,
+             rMax);
 
-  // 休息时长
-  QLabel *restLabel = new QLabel(QString::fromUtf8("休息:"), this);
-  restLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
-  toolbar->addWidget(restLabel);
-  m_restMinSpin = new QSpinBox(this);
-  m_restMinSpin->setRange(1, 120);
-  m_restMinSpin->setValue(15);
-  m_restMinSpin->setSuffix("m");
-  m_restMinSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_restMinSpin);
-  toolbar->addWidget(new QLabel("-", this));
-  m_restMaxSpin = new QSpinBox(this);
-  m_restMaxSpin->setRange(1, 120);
-  m_restMaxSpin->setValue(45);
-  m_restMaxSpin->setSuffix("m");
-  m_restMaxSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_restMaxSpin);
+    layout->addWidget(grp);
+    QPushButton *okBtn = new QPushButton("确定", &dlg);
+    okBtn->setStyleSheet(
+        "QPushButton { background: #1b5e20; color: #e0e0e0; border-radius: "
+        "6px; padding: 6px 20px; }QPushButton:hover { background: #2e7d32; }");
+    layout->addWidget(okBtn);
+    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    if (dlg.exec() == QDialog::Accepted) {
+      m_scrollMinSpin->setValue(sMin->value());
+      m_scrollMaxSpin->setValue(sMax->value());
+      m_likeWaitMinSpin->setValue(lMin->value());
+      m_likeWaitMaxSpin->setValue(lMax->value());
+      m_browseMinSpin->setValue(bMin->value());
+      m_browseMaxSpin->setValue(bMax->value());
+      m_restMinSpin->setValue(rMin->value());
+      m_restMaxSpin->setValue(rMax->value());
+    }
+  });
 
   toolbar->addSeparator();
 
-  // === LIST监控控件 ===
-  QLabel *listTitle = new QLabel(QString::fromUtf8("📋LIST:"), this);
-  listTitle->setStyleSheet(
-      "color: #ffcc00; font-size: 11px; font-weight: bold;");
-  toolbar->addWidget(listTitle);
-
+  // === LIST监控按钮 ===
   m_listMonitorBtn =
       new QPushButton(QString::fromUtf8("🔍 启动LIST监控"), this);
   m_listMonitorBtn->setStyleSheet(
@@ -326,91 +352,176 @@ void MainWindow::setupToolBar() {
       "QPushButton:pressed { background: #1565c0; }");
   toolbar->addWidget(m_listMonitorBtn);
 
-  // 点赞间隔
-  QLabel *listLikeLabel = new QLabel(QString::fromUtf8("赞:"), this);
-  listLikeLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
-  toolbar->addWidget(listLikeLabel);
-  m_listLikeMinSpin = new QSpinBox(this);
-  m_listLikeMinSpin->setRange(5, 120);
-  m_listLikeMinSpin->setValue(15);
-  m_listLikeMinSpin->setSuffix("s");
-  m_listLikeMinSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_listLikeMinSpin);
-  toolbar->addWidget(new QLabel("-", this));
-  m_listLikeMaxSpin = new QSpinBox(this);
-  m_listLikeMaxSpin->setRange(5, 300);
-  m_listLikeMaxSpin->setValue(45);
-  m_listLikeMaxSpin->setSuffix("s");
-  m_listLikeMaxSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_listLikeMaxSpin);
+  // ⚙ LIST设置 齿轮按钮
+  QPushButton *listGearBtn = new QPushButton(QString::fromUtf8("⚙ LIST"), this);
+  listGearBtn->setStyleSheet(gearStyle);
+  toolbar->addWidget(listGearBtn);
+  connect(listGearBtn, &QPushButton::clicked, this, [this, spinStyle]() {
+    QDialog dlg(this);
+    dlg.setWindowTitle("LIST监控设置");
+    dlg.setStyleSheet(
+        "QDialog { background: #12122a; }"
+        "QLabel { color: #e0e0e0; font-size: 12px; }"
+        "QGroupBox { color: #ffcc00; border: 1px solid #3a5a8a; "
+        "border-radius: 6px; margin-top: 8px; padding-top: 16px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 10px; }");
+    QVBoxLayout *layout = new QVBoxLayout(&dlg);
 
-  // 滚动间隔
-  QLabel *listScrollLabel = new QLabel(QString::fromUtf8("翻:"), this);
-  listScrollLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
-  toolbar->addWidget(listScrollLabel);
-  m_listScrollMinSpin = new QSpinBox(this);
-  m_listScrollMinSpin->setRange(1, 30);
-  m_listScrollMinSpin->setValue(3);
-  m_listScrollMinSpin->setSuffix("s");
-  m_listScrollMinSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_listScrollMinSpin);
-  toolbar->addWidget(new QLabel("-", this));
-  m_listScrollMaxSpin = new QSpinBox(this);
-  m_listScrollMaxSpin->setRange(1, 60);
-  m_listScrollMaxSpin->setValue(8);
-  m_listScrollMaxSpin->setSuffix("s");
-  m_listScrollMaxSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_listScrollMaxSpin);
+    // List URLs
+    QGroupBox *urlGrp = new QGroupBox("List URLs", &dlg);
+    QVBoxLayout *urlLayout = new QVBoxLayout(urlGrp);
+    QTextEdit *urlEdit = new QTextEdit(&dlg);
+    urlEdit->setMaximumHeight(80);
+    urlEdit->setPlainText(m_listUrlsEdit->toPlainText());
+    urlEdit->setPlaceholderText(QString::fromUtf8(
+        "每行一个List URL，如: https://x.com/i/lists/123456"));
+    urlEdit->setStyleSheet(
+        "QTextEdit { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
+        "#3a5a8a; border-radius: 4px; font-size: 11px; padding: 4px; }");
+    urlLayout->addWidget(urlEdit);
+    layout->addWidget(urlGrp);
 
-  // List停留
-  QLabel *listStayLabel = new QLabel(QString::fromUtf8("留:"), this);
-  listStayLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
-  toolbar->addWidget(listStayLabel);
-  m_listStayMinSpin = new QSpinBox(this);
-  m_listStayMinSpin->setRange(1, 60);
-  m_listStayMinSpin->setValue(3);
-  m_listStayMinSpin->setSuffix("m");
-  m_listStayMinSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_listStayMinSpin);
-  toolbar->addWidget(new QLabel("-", this));
-  m_listStayMaxSpin = new QSpinBox(this);
-  m_listStayMaxSpin->setRange(1, 60);
-  m_listStayMaxSpin->setValue(8);
-  m_listStayMaxSpin->setSuffix("m");
-  m_listStayMaxSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_listStayMaxSpin);
+    // 风控参数
+    QGroupBox *grp = new QGroupBox("风控参数", &dlg);
+    QFormLayout *form = new QFormLayout(grp);
 
-  // 最大点赞数
-  QLabel *maxLikesLabel = new QLabel(QString::fromUtf8("上限:"), this);
-  maxLikesLabel->setStyleSheet("color: #a0a0c0; font-size: 11px;");
-  toolbar->addWidget(maxLikesLabel);
-  m_listMaxLikesSpin = new QSpinBox(this);
-  m_listMaxLikesSpin->setRange(1, 500);
-  m_listMaxLikesSpin->setValue(50);
-  m_listMaxLikesSpin->setStyleSheet(spinStyle);
-  toolbar->addWidget(m_listMaxLikesSpin);
+    auto addRange = [&](const QString &label, QSpinBox *srcMin,
+                        QSpinBox *srcMax, int lo, int hi, const QString &suf,
+                        QSpinBox *&outMin, QSpinBox *&outMax) {
+      QHBoxLayout *row = new QHBoxLayout();
+      outMin = new QSpinBox(&dlg);
+      outMin->setRange(lo, hi);
+      outMin->setValue(srcMin->value());
+      outMin->setSuffix(suf);
+      outMin->setStyleSheet(spinStyle);
+      outMax = new QSpinBox(&dlg);
+      outMax->setRange(lo, hi);
+      outMax->setValue(srcMax->value());
+      outMax->setSuffix(suf);
+      outMax->setStyleSheet(spinStyle);
+      row->addWidget(outMin);
+      row->addWidget(new QLabel("-"));
+      row->addWidget(outMax);
+      form->addRow(label, row);
+    };
+
+    QSpinBox *llMin, *llMax, *lsMin, *lsMax, *lstMin, *lstMax;
+    addRange("点赞间隔:", m_listLikeMinSpin, m_listLikeMaxSpin, 5, 300, "s",
+             llMin, llMax);
+    addRange("滚动间隔:", m_listScrollMinSpin, m_listScrollMaxSpin, 1, 60, "s",
+             lsMin, lsMax);
+    addRange("List停留:", m_listStayMinSpin, m_listStayMaxSpin, 1, 60, "m",
+             lstMin, lstMax);
+
+    QSpinBox *maxLikes = new QSpinBox(&dlg);
+    maxLikes->setRange(1, 500);
+    maxLikes->setValue(m_listMaxLikesSpin->value());
+    maxLikes->setStyleSheet(spinStyle);
+    form->addRow("单次点赞上限:", maxLikes);
+
+    layout->addWidget(grp);
+    QPushButton *okBtn = new QPushButton("确定", &dlg);
+    okBtn->setStyleSheet(
+        "QPushButton { background: #1b5e20; color: #e0e0e0; border-radius: "
+        "6px; padding: 6px 20px; }QPushButton:hover { background: #2e7d32; }");
+    layout->addWidget(okBtn);
+    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    if (dlg.exec() == QDialog::Accepted) {
+      m_listUrlsEdit->setPlainText(urlEdit->toPlainText());
+      m_listLikeMinSpin->setValue(llMin->value());
+      m_listLikeMaxSpin->setValue(llMax->value());
+      m_listScrollMinSpin->setValue(lsMin->value());
+      m_listScrollMaxSpin->setValue(lsMax->value());
+      m_listStayMinSpin->setValue(lstMin->value());
+      m_listStayMaxSpin->setValue(lstMax->value());
+      m_listMaxLikesSpin->setValue(maxLikes->value());
+    }
+  });
 
   // Spacer
   QWidget *spacer = new QWidget(this);
   spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   toolbar->addWidget(spacer);
 
-  // List URL 编辑框放在第二行工具栏
-  QToolBar *listToolbar = addToolBar("LIST URLs");
-  listToolbar->setMovable(false);
-
-  QLabel *urlLabel = new QLabel(QString::fromUtf8("List URLs:"), this);
-  urlLabel->setStyleSheet("color: #ffcc00; font-size: 11px;");
-  listToolbar->addWidget(urlLabel);
-
+  // === 隐藏的存储SpinBox（不在界面上显示，仅用于存储值和触发信号） ===
+  // 采集
+  m_pagesSpin = new QSpinBox(this);
+  m_pagesSpin->setRange(1, 50);
+  m_pagesSpin->setValue(5);
+  m_pagesSpin->hide();
+  m_refreshMinSpin = new QSpinBox(this);
+  m_refreshMinSpin->setRange(10, 600);
+  m_refreshMinSpin->setValue(60);
+  m_refreshMinSpin->hide();
+  m_refreshMaxSpin = new QSpinBox(this);
+  m_refreshMaxSpin->setRange(10, 600);
+  m_refreshMaxSpin->setValue(120);
+  m_refreshMaxSpin->hide();
+  // 回馈
+  m_scrollMinSpin = new QSpinBox(this);
+  m_scrollMinSpin->setRange(1, 30);
+  m_scrollMinSpin->setValue(3);
+  m_scrollMinSpin->hide();
+  m_scrollMaxSpin = new QSpinBox(this);
+  m_scrollMaxSpin->setRange(1, 60);
+  m_scrollMaxSpin->setValue(8);
+  m_scrollMaxSpin->hide();
+  m_likeWaitMinSpin = new QSpinBox(this);
+  m_likeWaitMinSpin->setRange(1, 60);
+  m_likeWaitMinSpin->setValue(3);
+  m_likeWaitMinSpin->hide();
+  m_likeWaitMaxSpin = new QSpinBox(this);
+  m_likeWaitMaxSpin->setRange(1, 120);
+  m_likeWaitMaxSpin->setValue(8);
+  m_likeWaitMaxSpin->hide();
+  m_browseMinSpin = new QSpinBox(this);
+  m_browseMinSpin->setRange(1, 120);
+  m_browseMinSpin->setValue(10);
+  m_browseMinSpin->hide();
+  m_browseMaxSpin = new QSpinBox(this);
+  m_browseMaxSpin->setRange(1, 120);
+  m_browseMaxSpin->setValue(30);
+  m_browseMaxSpin->hide();
+  m_restMinSpin = new QSpinBox(this);
+  m_restMinSpin->setRange(1, 120);
+  m_restMinSpin->setValue(15);
+  m_restMinSpin->hide();
+  m_restMaxSpin = new QSpinBox(this);
+  m_restMaxSpin->setRange(1, 120);
+  m_restMaxSpin->setValue(45);
+  m_restMaxSpin->hide();
+  // LIST
+  m_listLikeMinSpin = new QSpinBox(this);
+  m_listLikeMinSpin->setRange(5, 120);
+  m_listLikeMinSpin->setValue(15);
+  m_listLikeMinSpin->hide();
+  m_listLikeMaxSpin = new QSpinBox(this);
+  m_listLikeMaxSpin->setRange(5, 300);
+  m_listLikeMaxSpin->setValue(45);
+  m_listLikeMaxSpin->hide();
+  m_listScrollMinSpin = new QSpinBox(this);
+  m_listScrollMinSpin->setRange(1, 30);
+  m_listScrollMinSpin->setValue(3);
+  m_listScrollMinSpin->hide();
+  m_listScrollMaxSpin = new QSpinBox(this);
+  m_listScrollMaxSpin->setRange(1, 60);
+  m_listScrollMaxSpin->setValue(8);
+  m_listScrollMaxSpin->hide();
+  m_listStayMinSpin = new QSpinBox(this);
+  m_listStayMinSpin->setRange(1, 60);
+  m_listStayMinSpin->setValue(3);
+  m_listStayMinSpin->hide();
+  m_listStayMaxSpin = new QSpinBox(this);
+  m_listStayMaxSpin->setRange(1, 60);
+  m_listStayMaxSpin->setValue(8);
+  m_listStayMaxSpin->hide();
+  m_listMaxLikesSpin = new QSpinBox(this);
+  m_listMaxLikesSpin->setRange(1, 500);
+  m_listMaxLikesSpin->setValue(50);
+  m_listMaxLikesSpin->hide();
   m_listUrlsEdit = new QTextEdit(this);
-  m_listUrlsEdit->setMaximumHeight(40);
-  m_listUrlsEdit->setPlaceholderText(
-      QString::fromUtf8("每行一个List URL，如: https://x.com/i/lists/123456"));
-  m_listUrlsEdit->setStyleSheet(
-      "QTextEdit { background: #1a1a2e; color: #e0e0e0; border: 1px solid "
-      "#3a5a8a; border-radius: 4px; font-size: 11px; padding: 2px 6px; }");
-  listToolbar->addWidget(m_listUrlsEdit);
+  m_listUrlsEdit->hide();
 
   loadSettings();
 }

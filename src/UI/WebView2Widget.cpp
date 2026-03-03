@@ -3,6 +3,7 @@
 #include "App/WebView2Handler.h"
 #include <QCloseEvent>
 #include <QDebug>
+#include <QDir>
 #include <QResizeEvent>
 #include <QTimer>
 #include <windows.h>
@@ -48,6 +49,15 @@ void WebView2Widget::CreateBrowser(const QString &url) {
   CreateBrowserInternal(url);
 }
 
+void WebView2Widget::SetUserDataFolder(const QString &folder) {
+  m_customUserDataFolder = folder;
+  // Ensure directory exists
+  QDir dir(folder);
+  if (!dir.exists()) {
+    dir.mkpath(".");
+  }
+}
+
 void WebView2Widget::CreateBrowserInternal(const QString &url) {
   if (m_browserCreated) {
     LoadUrl(url);
@@ -89,6 +99,56 @@ void WebView2Widget::CreateBrowserInternal(const QString &url) {
 
   m_browserCreating = true;
   m_pendingUrl = url;
+
+  // 如果有自定义用户数据目录，创建独立的 WebView2 Environment
+  if (!m_customUserDataFolder.isEmpty()) {
+    if (!m_customEnv) {
+      std::wstring userDataWide = m_customUserDataFolder.toStdWString();
+      CreateCoreWebView2EnvironmentWithOptions(
+          nullptr, userDataWide.c_str(), nullptr,
+          Microsoft::WRL::Callback<
+              ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
+              [this](HRESULT result, ICoreWebView2Environment *env) -> HRESULT {
+                if (FAILED(result) || !env) {
+                  qCritical() << "[WebView2Widget] Failed to create custom "
+                                 "environment";
+                  m_browserCreating = false;
+                  return S_OK;
+                }
+                m_customEnv = env;
+                qDebug() << "[WebView2Widget] Custom environment created for"
+                         << m_customUserDataFolder;
+                // Now create controller with this env
+                WId hwnd = winId();
+                m_customEnv->CreateCoreWebView2Controller(
+                    (HWND)hwnd,
+                    Microsoft::WRL::Callback<
+                        ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+                        [this](HRESULT result,
+                               ICoreWebView2Controller *controller) -> HRESULT {
+                          OnControllerCreated(result, controller);
+                          return S_OK;
+                        })
+                        .Get());
+                return S_OK;
+              })
+              .Get());
+    } else {
+      // Already have custom env, just create controller
+      WId hwnd = winId();
+      m_customEnv->CreateCoreWebView2Controller(
+          (HWND)hwnd,
+          Microsoft::WRL::Callback<
+              ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+              [this](HRESULT result,
+                     ICoreWebView2Controller *controller) -> HRESULT {
+                OnControllerCreated(result, controller);
+                return S_OK;
+              })
+              .Get());
+    }
+    return;
+  }
 
   ICoreWebView2Environment *env = app->environment();
   if (!env) {

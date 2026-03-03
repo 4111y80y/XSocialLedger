@@ -21,6 +21,10 @@ public:
   // Create browser with URL
   void CreateBrowser(const QString &url);
 
+  // Set custom user data folder (must be called before CreateBrowser)
+  // This creates a separate WebView2 environment for independent sessions
+  void SetUserDataFolder(const QString &folder);
+
   // Navigate to URL
   void LoadUrl(const QString &url);
 
@@ -69,9 +73,11 @@ private:
 
   WebView2Handler *m_handler;
   Microsoft::WRL::ComPtr<ICoreWebView2Controller> m_controller;
+  Microsoft::WRL::ComPtr<ICoreWebView2Environment> m_customEnv;
   bool m_browserCreated;
   bool m_browserCreating;
   QString m_pendingUrl;
+  QString m_customUserDataFolder;
 };
 
 #endif // WEBVIEW2WIDGET_H

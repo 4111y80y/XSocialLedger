@@ -384,20 +384,34 @@ void ReciprocatorEngine::injectClickMoreScript() {
     return;
 
   // X.com 使用虚拟滚动，滚到下方后顶部的 "Show N posts" 按钮会从 DOM 中移除
-  // 所以先滚回顶部，然后持续轮询等待 More 按钮出现并点击
+  // 必须确保真正回到顶部(scrollY=0)，按钮才会出现
   emit statusMessage(QString::fromUtf8("⬆️ 滚动到顶部等待新帖子..."));
 
-  // 一个完整的JS脚本：先滚到顶部，然后每2秒检查一次More按钮，最多等20秒
   QString script = R"JS(
 (function() {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // 第一步：强制立即滚到最顶部
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
 
     let attempts = 0;
     const maxAttempts = 10; // 10次 x 2秒 = 最多20秒
     const checkInterval = 2000;
 
+    function ensureAtTop() {
+        // 每次检查前都确保在最顶部
+        if (window.scrollY > 5) {
+            window.scrollTo(0, 0);
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+            console.log('[XSocialLedger] Force scroll to top, was at: ' + window.scrollY);
+        }
+    }
+
     function tryClickMore() {
         attempts++;
+        ensureAtTop();
+
         try {
             const cells = document.querySelectorAll('[data-testid="cellInnerDiv"]');
             for (const cell of cells) {
@@ -438,8 +452,8 @@ void ReciprocatorEngine::injectClickMoreScript() {
         }
     }
 
-    // 等1.5秒让页面滚到顶部后开始检查
-    setTimeout(tryClickMore, 1500);
+    // 等1秒确保DOM更新后开始检查
+    setTimeout(tryClickMore, 1000);
 })();
 )JS";
 

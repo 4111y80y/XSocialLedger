@@ -793,7 +793,7 @@ void MainWindow::saveLayout() {
   QSettings settings("XSocialLedger", "XSocialLedger");
   settings.setValue("geometry", saveGeometry());
   settings.setValue("windowState", saveState());
-  settings.setValue("splitterSizes", m_splitter->saveState());
+  settings.setValue("splitterSizes_v4", m_splitter->saveState());
   qDebug() << "[MainWindow] Layout saved";
 }
 
@@ -805,21 +805,8 @@ void MainWindow::restoreLayout() {
   if (settings.contains("windowState")) {
     restoreState(settings.value("windowState").toByteArray());
   }
-  if (settings.contains("splitterSizes")) {
-    // 只在列数匹配时恢复（避免旧的3列布局压缩新的第4列）
-    QByteArray state = settings.value("splitterSizes").toByteArray();
-    // 保存的列数与当前不符时，跳过恢复，使用默认stretch
-    QSplitter tmpSplitter;
-    tmpSplitter.restoreState(state);
-    if (tmpSplitter.count() == 0 ||
-        m_splitter->count() == tmpSplitter.count()) {
-      m_splitter->restoreState(state);
-    } else {
-      qDebug() << "[MainWindow] Splitter column count changed, skipping "
-                  "restore (saved:"
-               << tmpSplitter.count() << "current:" << m_splitter->count()
-               << ")";
-    }
+  if (settings.contains("splitterSizes_v4")) {
+    m_splitter->restoreState(settings.value("splitterSizes_v4").toByteArray());
   }
   qDebug() << "[MainWindow] Layout restored";
 }

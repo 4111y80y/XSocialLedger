@@ -74,15 +74,17 @@ private:
   // LIST监控控件
   QPushButton *m_listMonitorBtn;
   QTextEdit *m_listUrlsEdit;
-  QSpinBox *m_listLikeMinSpin;   // 点赞间隔最小(秒)
-  QSpinBox *m_listLikeMaxSpin;   // 点赞间隔最大(秒)
-  QSpinBox *m_listScrollMinSpin; // 滚动间隔最小(秒)
-  QSpinBox *m_listScrollMaxSpin; // 滚动间隔最大(秒)
-  QSpinBox *m_listStayMinSpin;   // List停留最小(分钟)
-  QSpinBox *m_listStayMaxSpin;   // List停留最大(分钟)
-  QSpinBox *m_listMaxLikesSpin;  // 单次最大点赞数
-  QSpinBox *m_listRestMinSpin;   // 休息间隔最小(分钟)
-  QSpinBox *m_listRestMaxSpin;   // 休息间隔最大(分钟)
+  QSpinBox *m_listLikeMinSpin;     // 点赞间隔最小(秒)
+  QSpinBox *m_listLikeMaxSpin;     // 点赞间隔最大(秒)
+  QSpinBox *m_listScrollMinSpin;   // 滚动间隔最小(秒)
+  QSpinBox *m_listScrollMaxSpin;   // 滚动间隔最大(秒)
+  QSpinBox *m_listStayMinSpin;     // List停留最小(分钟)
+  QSpinBox *m_listStayMaxSpin;     // List停留最大(分钟)
+  QSpinBox *m_listMaxLikesSpin;    // 单次最大点赞数
+  QSpinBox *m_listRestMinSpin;     // 休息间隔最小(分钟)
+  QSpinBox *m_listRestMaxSpin;     // 休息间隔最大(分钟)
+  QSpinBox *m_listCooldownMinSpin; // 同用户冷却最小(秒)
+  QSpinBox *m_listCooldownMaxSpin; // 同用户冷却最大(秒)
 
   // Status bar
   QLabel *m_statusLabel;

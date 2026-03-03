@@ -423,6 +423,10 @@ void MainWindow::setupToolBar() {
     addRange("达标后休息:", m_listRestMinSpin, m_listRestMaxSpin, 1, 120, "m",
              lrMin, lrMax);
 
+    QSpinBox *lcMin, *lcMax;
+    addRange("同用户冷却:", m_listCooldownMinSpin, m_listCooldownMaxSpin, 60,
+             3600, "s", lcMin, lcMax);
+
     layout->addWidget(grp);
     QPushButton *okBtn = new QPushButton("确定", &dlg);
     okBtn->setStyleSheet(
@@ -442,6 +446,8 @@ void MainWindow::setupToolBar() {
       m_listMaxLikesSpin->setValue(maxLikes->value());
       m_listRestMinSpin->setValue(lrMin->value());
       m_listRestMaxSpin->setValue(lrMax->value());
+      m_listCooldownMinSpin->setValue(lcMin->value());
+      m_listCooldownMaxSpin->setValue(lcMax->value());
     }
   });
 
@@ -534,6 +540,14 @@ void MainWindow::setupToolBar() {
   m_listRestMaxSpin->setRange(1, 120);
   m_listRestMaxSpin->setValue(30);
   m_listRestMaxSpin->hide();
+  m_listCooldownMinSpin = new QSpinBox(this);
+  m_listCooldownMinSpin->setRange(60, 3600);
+  m_listCooldownMinSpin->setValue(600);
+  m_listCooldownMinSpin->hide();
+  m_listCooldownMaxSpin = new QSpinBox(this);
+  m_listCooldownMaxSpin->setRange(60, 7200);
+  m_listCooldownMaxSpin->setValue(1200);
+  m_listCooldownMaxSpin->hide();
   m_listUrlsEdit = new QTextEdit(this);
   m_listUrlsEdit->hide();
 
@@ -750,6 +764,8 @@ void MainWindow::setupConnections() {
     m_listMonitor->setMaxLikesPerSession(m_listMaxLikesSpin->value());
     m_listMonitor->setRestInterval(m_listRestMinSpin->value(),
                                    m_listRestMaxSpin->value());
+    m_listMonitor->setUserCooldown(m_listCooldownMinSpin->value(),
+                                   m_listCooldownMaxSpin->value());
 
     saveSettings();
     m_listMonitor->start(urls);
@@ -772,6 +788,8 @@ void MainWindow::setupConnections() {
     m_listMonitor->setMaxLikesPerSession(m_listMaxLikesSpin->value());
     m_listMonitor->setRestInterval(m_listRestMinSpin->value(),
                                    m_listRestMaxSpin->value());
+    m_listMonitor->setUserCooldown(m_listCooldownMinSpin->value(),
+                                   m_listCooldownMaxSpin->value());
     saveSettings();
   };
   connect(m_listLikeMinSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
@@ -792,6 +810,10 @@ void MainWindow::setupConnections() {
           updateListConfig);
   connect(m_listRestMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
           updateListConfig);
+  connect(m_listCooldownMinSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+          this, updateListConfig);
+  connect(m_listCooldownMaxSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+          this, updateListConfig);
 }
 void MainWindow::onStartCollecting() { m_collector->startCollecting(); }
 
@@ -1000,6 +1022,12 @@ void MainWindow::loadSettings() {
   m_listRestMaxSpin->setValue(settings.value("listRestMax", 30).toInt());
   m_listMonitor->setRestInterval(m_listRestMinSpin->value(),
                                  m_listRestMaxSpin->value());
+  m_listCooldownMinSpin->setValue(
+      settings.value("listCooldownMin", 600).toInt());
+  m_listCooldownMaxSpin->setValue(
+      settings.value("listCooldownMax", 1200).toInt());
+  m_listMonitor->setUserCooldown(m_listCooldownMinSpin->value(),
+                                 m_listCooldownMaxSpin->value());
 }
 
 void MainWindow::saveSettings() {
@@ -1027,6 +1055,8 @@ void MainWindow::saveSettings() {
   settings.setValue("listMaxLikes", m_listMaxLikesSpin->value());
   settings.setValue("listRestMin", m_listRestMinSpin->value());
   settings.setValue("listRestMax", m_listRestMaxSpin->value());
+  settings.setValue("listCooldownMin", m_listCooldownMinSpin->value());
+  settings.setValue("listCooldownMax", m_listCooldownMaxSpin->value());
   settings.setValue("listUrls", m_listUrlsEdit->toPlainText());
 }
 

@@ -17,7 +17,8 @@ ListMonitorEngine::ListMonitorEngine(WebView2Widget *browser,
       m_likeIntervalMinSec(15), m_likeIntervalMaxSec(45), m_scrollMinSec(3),
       m_scrollMaxSec(8), m_listStayMinMin(3), m_listStayMaxMin(8),
       m_switchWaitMinSec(10), m_switchWaitMaxSec(30), m_maxLikesPerSession(50),
-      m_restMinMin(10), m_restMaxMin(30) {
+      m_restMinMin(10), m_restMaxMin(30), m_userCooldownMinSec(600),
+      m_userCooldownMaxSec(1200) {
 
   m_scrollTimer = new QTimer(this);
   m_scrollTimer->setSingleShot(true);
@@ -93,6 +94,11 @@ void ListMonitorEngine::setMaxLikesPerSession(int maxLikes) {
 void ListMonitorEngine::setRestInterval(int minMin, int maxMin) {
   m_restMinMin = minMin;
   m_restMaxMin = maxMin;
+}
+
+void ListMonitorEngine::setUserCooldown(int minSec, int maxSec) {
+  m_userCooldownMinSec = minSec;
+  m_userCooldownMaxSec = maxSec;
 }
 
 int ListMonitorEngine::randomInRange(int minVal, int maxVal) {
@@ -356,6 +362,18 @@ void ListMonitorEngine::onWebMessage(const QString &message) {
     if (m_likedTweetIds.contains(tweetId))
       return;
 
+    // 检查同用户冷却
+    if (!handle.isEmpty() && m_userLastLikedTime.contains(handle)) {
+      QDateTime lastTime = m_userLastLikedTime[handle];
+      int cooldownSec =
+          randomInRange(m_userCooldownMinSec, m_userCooldownMaxSec);
+      int elapsed = lastTime.secsTo(QDateTime::currentDateTimeUtc());
+      if (elapsed < cooldownSec) {
+        // 还在冷却中，跳过这个用户
+        return;
+      }
+    }
+
     // 风控：检查点赞数上限
     if (m_sessionLikeCount >= m_maxLikesPerSession) {
       // 进入休息
@@ -399,6 +417,11 @@ void ListMonitorEngine::onWebMessage(const QString &message) {
       // 记录
       m_likedTweetIds.insert(tweetId);
       m_sessionLikeCount++;
+
+      // 记录用户最后点赞时间(冷却)
+      if (!handle.isEmpty()) {
+        m_userLastLikedTime[handle] = QDateTime::currentDateTimeUtc();
+      }
 
       // 存入DataStorage - 标记为已回馈
       SocialAction action;

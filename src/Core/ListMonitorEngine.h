@@ -1,10 +1,13 @@
 #ifndef LISTMONITORENGINE_H
 #define LISTMONITORENGINE_H
 
+#include <QDateTime>
+#include <QMap>
 #include <QObject>
 #include <QSet>
 #include <QStringList>
 #include <QTimer>
+
 
 class WebView2Widget;
 class DataStorage;
@@ -30,6 +33,7 @@ public:
   void setSwitchWait(int minSec, int maxSec);
   void setMaxLikesPerSession(int maxLikes);
   void setRestInterval(int minMin, int maxMin);
+  void setUserCooldown(int minSec, int maxSec);
 
 signals:
   void statusMessage(const QString &message);
@@ -71,6 +75,9 @@ private:
   // 已点赞的帖子ID避免重复
   QSet<QString> m_likedTweetIds;
 
+  // 每个用户的最后点赞时间 (冷却跟踪)
+  QMap<QString, QDateTime> m_userLastLikedTime;
+
   // 定时器
   QTimer *m_scrollTimer;
   QTimer *m_listStayTimer; // 每个List停留时长
@@ -90,6 +97,8 @@ private:
   int m_maxLikesPerSession; // 单次会话最大点赞 默认50
   int m_restMinMin;         // 休息间隔最小(分钟) 默认10
   int m_restMaxMin;         // 休息间隔最大(分钟) 默认30
+  int m_userCooldownMinSec; // 同用户冷却最小(秒) 默认600
+  int m_userCooldownMaxSec; // 同用户冷却最大(秒) 默认1200
 };
 
 #endif // LISTMONITORENGINE_H

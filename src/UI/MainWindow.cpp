@@ -116,9 +116,7 @@ void MainWindow::setupUI() {
   m_recipBrowser->CreateBrowser("https://x.com");
   m_reciprocator = new ReciprocatorEngine(m_recipBrowser, m_storage, this);
 
-  // 创建LIST监控浏览器和引擎（使用独立用户数据目录）
-  m_listBrowser->SetUserDataFolder(QCoreApplication::applicationDirPath() +
-                                   "/userdata_list");
+  // 创建LIST监控浏览器和引擎（共享用户数据，无需重新登录）
   m_listBrowser->CreateBrowser("https://x.com");
   m_listMonitor = new ListMonitorEngine(m_listBrowser, m_storage, this);
 

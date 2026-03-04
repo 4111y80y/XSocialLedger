@@ -252,6 +252,14 @@ void ListMonitorEngine::injectScanScript() {
             }
             if (!tweetId) continue;
 
+            // 跳过回复帖 - 只点赞原创帖
+            const textContent = article.textContent || '';
+            if (textContent.includes('Replying to') || textContent.includes('回复')) continue;
+            // 检查是否有回复指示器
+            const replyIndicator = article.querySelector('[data-testid="reply"]');
+            const socialContext = article.querySelector('[data-testid="socialContext"]');
+            if (socialContext && socialContext.textContent && socialContext.textContent.includes('replied')) continue;
+
             // 获取作者handle
             const userLinks = article.querySelectorAll('a[role="link"][href^="/"]');
             let authorHandle = '';
